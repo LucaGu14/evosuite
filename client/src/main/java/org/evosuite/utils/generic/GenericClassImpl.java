@@ -558,7 +558,7 @@ public class GenericClassImpl implements Serializable,GenericClass<GenericClassI
     private GenericClass<?> getGenericTypeVariableInstantiation(
             Map<TypeVariable<?>, Type> typeMap, int recursionLevel)
             throws ConstructionFailedException {
-   		if (typeMap.containsKey(type) /*GIO: added:*/ && typeMap.get(type) != type) {
+   		if (typeMap.containsKey(type) /*GIO: added:*/ /*LUCA: the following code slows down the coverage && typeMap.get(type) != type*/) {
             logger.debug("Type contains {}: {}", this, typeMap);
             if(typeMap.get(type) == type) {
                 // FIXXME: How does this happen?
