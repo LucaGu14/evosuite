@@ -73,7 +73,7 @@ public class RankBasedPreferenceSorting<T extends Chromosome<T>> implements Rank
     public void computeRankingAssignment(List<T> solutions,
                                          Set<? extends FitnessFunction<T>> uncovered_goals) {
         if (solutions.isEmpty()) {
-            logger.debug("solution is empty");
+            logger.warn("solution is empty");
             return;
         }
 
@@ -180,6 +180,10 @@ public class RankBasedPreferenceSorting<T extends Chromosome<T>> implements Rank
      * {@inheritDoc}
      */
     public int getNumberOfSubfronts() {
-        return this.fronts.size();
+    	if (this.fronts == null) {
+    		return 0;
+    	} else {
+    		return this.fronts.size();
+    	}
     }
 }

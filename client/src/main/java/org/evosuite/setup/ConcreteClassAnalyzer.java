@@ -75,7 +75,7 @@ public class ConcreteClassAnalyzer {
      * <b>Warning:</b> May return incorrect and inconsistent results when different inheritance
      * trees are passed for the same class across multiple calls.
      *
-     * @param clazz           for which to return its subclasses, not {@code null}
+     * @param clazz for which to return its subclasses, not {@code null}
      * @param inheritanceTree modeling subclass-relationships for {@code clazz}, not {@code null}
      * @return subclasses of {@code clazz} found in the {@code inheritanceTree}
      */
@@ -94,7 +94,7 @@ public class ConcreteClassAnalyzer {
      * to concrete implementing subclasses based on the given {@code inheritanceTree} (modulo a
      * few special cases that are currently handled differently).
      *
-     * @param clazz           for which to compute a mapping
+     * @param clazz for which to compute a mapping
      * @param inheritanceTree modeling sub-class relationships for {@code clazz}
      * @return subclasses of {@code clazz}
      */
@@ -157,7 +157,7 @@ public class ConcreteClassAnalyzer {
      * package distance to {@code clazz}. Returns {@code null} if {@code clazz} can't be handled.
      *
      * @param clazz for which to find subclasses
-     * @param tree  inheritance tree modelling subclass relationships
+     * @param tree inheritance tree modelling subclass relationships
      * @return the set of subclasses for {@code clazz}, all having the lowest package distance,
      * or {@code null} (see above)
      */
@@ -209,7 +209,7 @@ public class ConcreteClassAnalyzer {
                 }
             }
 
-            if (!actualClasses.isEmpty()) {
+            if (actualClasses.size() > Properties.MAX_SUBCLASSES_PER_CLASS /*!actualClasses.isEmpty()*/) { /*GIO: allowing further available generators */ 
                 break; // Don't include classes with higher package distance.
             }
         }
