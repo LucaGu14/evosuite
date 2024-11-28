@@ -27,15 +27,15 @@ package org.evosuite.runtime;
  * <p>
  * Created by Andrea Arcuri on 29/03/15.
  */
-public class TooManyResourcesException extends RuntimeException {
+public class TooManyResourcesException extends Error { /*FIX: If we extend RuntimeException there are more chances that this instrumented exception can be cought in the target program */
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    public TooManyResourcesException() {
+	public TooManyResourcesException(){
         super();
     }
 
-    public TooManyResourcesException(String msg) {
+    public TooManyResourcesException(String msg){
         super(msg);
     }
 }
