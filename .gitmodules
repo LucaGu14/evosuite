@@ -1,0 +1,6 @@
+[submodule "sushi-runtime/jbse"]
+	path = sushi-runtime/jbse
+	url = https://github.com/pietrobraione/jbse.git
+[submodule "sushi-runtime/sushi-lib"]
+	path = sushi-runtime/sushi-lib
+	url = https://github.com/pietrobraione/sushi-lib.git

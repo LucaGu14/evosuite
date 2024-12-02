@@ -47,6 +47,9 @@ public class LineNumberMethodAdapter extends MethodVisitor {
 
     private final String className;
 
+    private boolean instrumentingConstructor = false;
+    int newInsnMetSoFar = 0;
+
     private boolean hadInvokeSpecial = false;
 
     private final List<Integer> skippedLines = new ArrayList<>();
@@ -69,6 +72,7 @@ public class LineNumberMethodAdapter extends MethodVisitor {
         this.methodName = methodName;
         if (!methodName.equals("<init>"))
             hadInvokeSpecial = true;
+        else instrumentingConstructor = true;
     }
 
     private void addLineNumberInstrumentation(int line) {
@@ -100,6 +104,14 @@ public class LineNumberMethodAdapter extends MethodVisitor {
         addLineNumberInstrumentation(line);
     }
 
+    @Override
+    public void visitTypeInsn(final int opcode, final String type) {
+    	if (instrumentingConstructor && !hadInvokeSpecial && opcode == Opcodes.NEW) {
+    		++newInsnMetSoFar;
+    	}
+    	super.visitTypeInsn(opcode, type);
+    }
+    
     /* (non-Javadoc)
      * @see org.objectweb.asm.MethodAdapter#visitMethodInsn(int, java.lang.String, java.lang.String, java.lang.String)
      */
@@ -112,11 +124,15 @@ public class LineNumberMethodAdapter extends MethodVisitor {
         super.visitMethodInsn(opcode, owner, name, desc, itf);
         if (opcode == Opcodes.INVOKESPECIAL) {
             if (methodName.equals("<init>")) {
-                hadInvokeSpecial = true;
-                for (int line : skippedLines) {
-                    addLineNumberInstrumentation(line);
-                }
-                skippedLines.clear();
+            	if (newInsnMetSoFar > 0) {
+            		--newInsnMetSoFar;
+            	} else {
+            		hadInvokeSpecial = true;
+            		for (int line : skippedLines) {
+            			addLineNumberInstrumentation(line);
+            		}
+            		skippedLines.clear();
+            	}
             }
         }
     }

@@ -182,6 +182,12 @@ public class CoverageCriteriaAnalyzer {
                 return RuntimeVariable.IBranchCoverage;
             case TRYCATCH:
                 return RuntimeVariable.TryCatchCoverage;
+            case PATHCONDITION: /*Sushi: Path condition fitness*/
+                return RuntimeVariable.PathConditionCoverage;
+            case BRANCH_WITH_AIDING_PATH_CONDITIONS:  /*SUSHI: Aiding path conditions*/
+                return RuntimeVariable.BranchCoverage;
+            case SEEPEP:  /*SEEPEP: DAG coverage*/
+                return RuntimeVariable.SeepepCoverage;
             default:
                 throw new RuntimeException("Criterion not supported: " + criterion);
 
@@ -208,7 +214,7 @@ public class CoverageCriteriaAnalyzer {
     }
 
     public static void analyzeCoverage(TestSuiteChromosome testSuite, Properties.Criterion criterion) {
-        analyzeCoverage(testSuite, criterion, true);
+        analyzeCoverage(testSuite,criterion,true);
     }
 
     private static void analyzeCoverage(TestSuiteChromosome testSuite, Properties.Criterion criterion, boolean recalculate) {
@@ -217,7 +223,7 @@ public class CoverageCriteriaAnalyzer {
 
         TestFitnessFactory<? extends TestFitnessFunction> factory = FitnessFunctions.getFitnessFactory(criterion);
 
-        if (recalculate) {
+        if(recalculate) {
             reinstrument(testSuiteCopy, criterion);
 
             for (TestChromosome test : testSuiteCopy.getTestChromosomes()) {
@@ -311,7 +317,12 @@ public class CoverageCriteriaAnalyzer {
             case ALLDEFS:
                 return RuntimeVariable.AllDefCoverageBitString;
             case BRANCH:
+            case BRANCH_WITH_AIDING_PATH_CONDITIONS: /*SUSHI: Aiding path conditions*/
                 return RuntimeVariable.BranchCoverageBitString;
+            case PATHCONDITION: /*Sushi: Path condition fitness*/
+            		return RuntimeVariable.PathConditionCoverage;
+            case SEEPEP: /*SEEPEP: DAG coverage*/
+            		return RuntimeVariable.SeepepCoverage;  
             case CBRANCH:
                 return RuntimeVariable.CBranchCoverageBitString;
             case IBRANCH:

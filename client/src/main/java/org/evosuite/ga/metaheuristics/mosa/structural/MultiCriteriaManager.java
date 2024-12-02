@@ -89,7 +89,7 @@ public class MultiCriteriaManager extends StructuralGoalManager implements Seria
 	 * Maps branch IDs to the corresponding fitness function, only considering root branches of
 	 * methods (i.e. the goal is to just invoke the method).
 	 */
-	private final Map<String, TestFitnessFunction> branchlessMethodCoverageMap = new LinkedHashMap<>();
+	protected final Map<String, TestFitnessFunction> branchlessMethodCoverageMap = new LinkedHashMap<>();
 
 	/**
 	 * Creates a new {@code MultiCriteriaManager} with the given list of targets. The targets are
@@ -142,7 +142,7 @@ public class MultiCriteriaManager extends StructuralGoalManager implements Seria
 					addDependencies4CBranch();
 					break;
 				default:
-					LoggingUtils.getEvoLogger().error("The criterion {} is not currently supported in DynaMOSA", criterion.name());
+					//LoggingUtils.getEvoLogger().error("The criterion {} is not currently supported in DynaMOSA", criterion.name());
 			}
 		}
 

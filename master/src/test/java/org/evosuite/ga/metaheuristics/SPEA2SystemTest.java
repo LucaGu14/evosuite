@@ -45,86 +45,86 @@ import java.util.List;
 
 /**
  * SPEA2SystemTest.
- *
+ * 
  * @author José Campos
  */
 public class SPEA2SystemTest extends SystemTestBase {
 
-    @Before
-    public void reset() {
-        RhoCoverageFactory.getGoals().clear();
-        AmbiguityCoverageFactory.getGoals().clear();
+  @Before
+  public void reset() {
+    RhoCoverageFactory.getGoals().clear();
+    AmbiguityCoverageFactory.getGoals().clear();
+  }
+
+  public double[][] test(String targetClass) {
+    Properties.CRITERION = new Criterion[2];
+    Properties.CRITERION[0] = Criterion.RHO;
+    Properties.CRITERION[1] = Criterion.AMBIGUITY;
+
+    Properties.ALGORITHM = Algorithm.SPEA2;
+    Properties.SELECTION_FUNCTION = Properties.SelectionFunction.BINARY_TOURNAMENT;
+    Properties.STOPPING_CONDITION = StoppingCondition.MAXGENERATIONS;
+    Properties.MINIMIZE = false;
+
+    EvoSuite evosuite = new EvoSuite();
+
+    Properties.TARGET_CLASS = targetClass;
+
+    String[] command = new String[] {"-generateSuite", "-class", targetClass};
+
+    Object result = evosuite.parseCommandLine(command);
+    Assert.assertNotNull(result);
+
+    GeneticAlgorithm<TestSuiteChromosome> ga = getGAFromResult(result);
+
+    final FitnessFunction<TestSuiteChromosome> branch = ga.getFitnessFunctions().get(0);
+    final FitnessFunction<TestSuiteChromosome> rho = ga.getFitnessFunctions().get(1);
+
+    List<TestSuiteChromosome> population = new ArrayList<>(ga.getBestIndividuals());
+
+    double[][] front = new double[population.size()][2];
+    for (int i = 0; i < population.size(); i++) {
+      Chromosome<TestSuiteChromosome> c = population.get(i);
+      front[i][0] = c.getFitness(branch);
+      front[i][1] = c.getFitness(rho);
     }
 
-    public double[][] test(String targetClass) {
-        Properties.CRITERION = new Criterion[2];
-        Properties.CRITERION[0] = Criterion.RHO;
-        Properties.CRITERION[1] = Criterion.AMBIGUITY;
+    return front;
+  }
 
-        Properties.ALGORITHM = Algorithm.SPEA2;
-        Properties.SELECTION_FUNCTION = Properties.SelectionFunction.BINARY_TOURNAMENT;
-        Properties.STOPPING_CONDITION = StoppingCondition.MAXGENERATIONS;
-        Properties.MINIMIZE = false;
+  @Test
+  public void nonMinimalSpacing() {
+    String targetClass = BMICalculator.class.getCanonicalName();
 
-        EvoSuite evosuite = new EvoSuite();
+    Properties.POPULATION = 50;
+    Properties.SEARCH_BUDGET = 10;
+    double[][] front = test(targetClass);
 
-        Properties.TARGET_CLASS = targetClass;
-
-        String[] command = new String[]{"-generateSuite", "-class", targetClass};
-
-        Object result = evosuite.parseCommandLine(command);
-        Assert.assertNotNull(result);
-
-        GeneticAlgorithm<TestSuiteChromosome> ga = (GeneticAlgorithm<TestSuiteChromosome>) getGAFromResult(result);
-
-        final FitnessFunction<TestSuiteChromosome> branch = ga.getFitnessFunctions().get(0);
-        final FitnessFunction<TestSuiteChromosome> rho = ga.getFitnessFunctions().get(1);
-
-        List<TestSuiteChromosome> population = new ArrayList<>(ga.getBestIndividuals());
-
-        double[][] front = new double[population.size()][2];
-        for (int i = 0; i < population.size(); i++) {
-            Chromosome<TestSuiteChromosome> c = population.get(i);
-            front[i][0] = c.getFitness(branch);
-            front[i][1] = c.getFitness(rho);
-        }
-
-        return front;
+    for (int i = 0; i < front.length; i++) {
+      assertNotEquals(front[i][0], front[i][1], 0.0);
     }
 
-    @Test
-    public void nonMinimalSpacing() {
-        String targetClass = BMICalculator.class.getCanonicalName();
+    Spacing sp = new Spacing();
+    double[] max = sp.getMaximumValues(front);
+    double[] min = sp.getMinimumValues(front);
 
-        Properties.POPULATION = 50;
-        Properties.SEARCH_BUDGET = 10;
-        double[][] front = test(targetClass);
+    double[][] frontNormalized = sp.getNormalizedFront(front, max, min);
+    assertNotEquals(0.0, sp.evaluate(frontNormalized), 0.0);
+  }
 
-        for (int i = 0; i < front.length; i++) {
-            assertNotEquals(front[i][0], front[i][1], 0.0);
-        }
+  @Test
+  public void minimalSpacing() {
+    String targetClass = BMICalculator.class.getCanonicalName();
 
-        Spacing sp = new Spacing();
-        double[] max = sp.getMaximumValues(front);
-        double[] min = sp.getMinimumValues(front);
+    Properties.POPULATION = 10;
+    Properties.SEARCH_BUDGET = 40;
+    double[][] front = test(targetClass);
 
-        double[][] frontNormalized = sp.getNormalizedFront(front, max, min);
-        assertNotEquals(0.0, sp.evaluate(frontNormalized), 0.0);
-    }
+    Spacing sp = new Spacing();
+    double[] max = sp.getMaximumValues(front);
+    double[] min = sp.getMinimumValues(front);
 
-    @Test
-    public void minimalSpacing() {
-        String targetClass = BMICalculator.class.getCanonicalName();
-
-        Properties.POPULATION = 10;
-        Properties.SEARCH_BUDGET = 40;
-        double[][] front = test(targetClass);
-
-        Spacing sp = new Spacing();
-        double[] max = sp.getMaximumValues(front);
-        double[] min = sp.getMinimumValues(front);
-
-        double[][] frontNormalized = sp.getNormalizedFront(front, max, min);
-        assertEquals(0.0, sp.evaluate(frontNormalized), 0.0);
-    }
+    double[][] frontNormalized = sp.getNormalizedFront(front, max, min);
+    assertEquals(0.0, sp.evaluate(frontNormalized), 0.0);
+  }
 }

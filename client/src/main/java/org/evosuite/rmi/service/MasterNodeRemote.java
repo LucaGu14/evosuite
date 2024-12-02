@@ -21,6 +21,7 @@ package org.evosuite.rmi.service;
 
 import org.evosuite.Properties.NoSuchParameterException;
 import org.evosuite.ga.Chromosome;
+import org.evosuite.ga.FitnessFunction;
 import org.evosuite.result.TestGenerationResult;
 import org.evosuite.statistics.RuntimeVariable;
 
@@ -30,34 +31,40 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Master Node view in the client process.
+ * Master Node view in the client process.  
  *
  * @author arcuri
  */
 public interface MasterNodeRemote extends Remote {
 
-    String RMI_SERVICE_NAME = "MasterNode";
+	String RMI_SERVICE_NAME = "MasterNode";
+	
+	/*
+	 * Note: we need names starting with 'evosuite' here, because those names are accessed 
+	 * through reflections and used in the checks of the sandbox 
+	 */
+	
+	void evosuite_registerClientNode(String clientRmiIdentifier) throws RemoteException;
+	
+	void evosuite_informChangeOfStateInClient(String clientRmiIdentifier, ClientState state, ClientStateInformation information) throws RemoteException;
+	
+	void evosuite_collectStatistics(String clientRmiIdentifier, Chromosome<?> individual) throws RemoteException;
 
-    /*
-     * Note: we need names starting with 'evosuite' here, because those names are accessed
-     * through reflections and used in the checks of the sandbox
-     */
+	void evosuite_collectStatistics(String clientRmiIdentifier, RuntimeVariable variable, Object value) throws RemoteException;
 
-    void evosuite_registerClientNode(String clientRmiIdentifier) throws RemoteException;
+	void evosuite_collectTestGenerationResult(String clientRmiIdentifier, List<TestGenerationResult> results) throws RemoteException;
 
-    void evosuite_informChangeOfStateInClient(String clientRmiIdentifier, ClientState state, ClientStateInformation information) throws RemoteException;
+	void evosuite_flushStatisticsForClassChange(String clientRmiIdentifier) throws RemoteException;
 
-    void evosuite_collectStatistics(String clientRmiIdentifier, Chromosome<?> individual) throws RemoteException;
-
-    void evosuite_collectStatistics(String clientRmiIdentifier, RuntimeVariable variable, Object value) throws RemoteException;
-
-    void evosuite_collectTestGenerationResult(String clientRmiIdentifier, List<TestGenerationResult> results) throws RemoteException;
-
-    void evosuite_flushStatisticsForClassChange(String clientRmiIdentifier) throws RemoteException;
-
-    void evosuite_updateProperty(String clientRmiIdentifier, String propertyName, Object value) throws RemoteException, IllegalArgumentException, IllegalAccessException, NoSuchParameterException;
-
-    void evosuite_migrate(String clientRmiIdentifier, Set<? extends Chromosome<?>> migrants) throws RemoteException;
+	void evosuite_updateProperty(String clientRmiIdentifier, String propertyName, Object value) throws RemoteException, IllegalArgumentException, IllegalAccessException, NoSuchParameterException;
+	
+	void evosuite_migrate(String clientRmiIdentifier, Set<? extends Chromosome<?>> migrants) throws RemoteException;
 
     void evosuite_collectBestSolutions(String clientRmiIdentifier, Set<? extends Chromosome<?>> solutions) throws RemoteException;
+    
+    String evosuite_retrieveInjectedFitnessFunctions() throws RemoteException;
+    
+    void evosuite_notifyGeneratedTestCase(FitnessFunction<?> goal, String testFileName) throws RemoteException;
+
+    void evosuite_notifyDismissedFitnessGoal(FitnessFunction<?> goal, int iteration, double bestValue, int[] updateIterations) throws RemoteException;
 }

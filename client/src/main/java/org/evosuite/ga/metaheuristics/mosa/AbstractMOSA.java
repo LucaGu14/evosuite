@@ -29,6 +29,8 @@ import org.evosuite.ga.FitnessFunction;
 import org.evosuite.ga.archive.Archive;
 import org.evosuite.ga.comparators.DominanceComparator;
 import org.evosuite.ga.metaheuristics.GeneticAlgorithm;
+import org.evosuite.ga.metaheuristics.SearchListener;
+import org.evosuite.ga.operators.crossover.SushiCrossOver;
 import org.evosuite.testcase.TestCase;
 import org.evosuite.testcase.TestChromosome;
 import org.evosuite.testcase.TestFitnessFunction;
@@ -232,7 +234,7 @@ public abstract class AbstractMOSA extends GeneticAlgorithm<TestChromosome> {
 		// Add new randomly generate tests
 		for (int i = 0; i < Properties.POPULATION * Properties.P_TEST_INSERTION; i++) {
 			final TestChromosome tch;
-			if ((!Properties.AVOID_REPLICAS_OF_INDIVIDUALS && this.getCoveredGoals().size() == 0)
+			if ((!Properties.AVOID_REPLICAS_OF_INDIVIDUALS && this.getCoveredGoals().size() == 0) 
 					|| Randomness.nextBoolean()) {
 				tch = this.chromosomeFactory.getChromosome();
 				tch.setChanged(true);
@@ -369,6 +371,39 @@ public abstract class AbstractMOSA extends GeneticAlgorithm<TestChromosome> {
 	}
 
 	/**
+	 * Notify all search listeners of an individual becoming part of next generation
+	 * 
+	 * @param chromosome
+	 *            a {@link org.evosuite.ga.Chromosome} object.
+	 */
+	protected void notifyInNextGeneration(TestChromosome chromosome) { //GIO: TODO
+		for (SearchListener listener : listeners) {
+			if (listener instanceof SushiCrossOver) { 
+				((SushiCrossOver) listener).inNextGeneration(chromosome);
+			}
+		}
+	}
+	
+	/**
+	 * Calculate fitness for the whole population
+	 */
+	/*
+	 *protected void calculateFitness() {
+	 *	logger.debug("Calculating fitness for " + population.size() + " individuals");	
+	 *	Iterator<TestChromosome> iterator = population.iterator();
+	 *	while (iterator.hasNext()) {
+	 *		TestChromosome c = iterator.next();
+	 *		if (isFinished()) {
+	 *			if (c.isChanged())
+	 *				iterator.remove();
+	 *		} else {
+	 *			calculateFitness(c);
+	 *		}
+	 *	}
+	 *}
+	 */
+
+	/**
 	 * This method extracts non-dominated solutions (tests) according to all covered goal
 	 * (e.g., branches).
 	 *
@@ -425,7 +460,7 @@ public abstract class AbstractMOSA extends GeneticAlgorithm<TestChromosome> {
 	 *
 	 * @return
 	 */
-	protected Set<TestFitnessFunction> getCoveredGoals() {
+	/*GIO*//*protected*/public Set<TestFitnessFunction> getCoveredGoals() {
 		return new LinkedHashSet<>(Archive.getArchiveInstance().getCoveredTargets());
 	}
 

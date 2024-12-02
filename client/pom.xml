@@ -11,6 +11,14 @@
 	<artifactId>evosuite-client</artifactId>
 	<packaging>jar</packaging>
 
+	<repositories>
+ 		<!-- a repository local to the project, to manage the dependency on jbse and shushi-lib -->
+   		<repository>
+    		<id>the-project-local-repo</id>
+    		<url>file://${project.basedir}/../target</url>
+  		</repository>
+	</repositories>
+
     <profiles>
         <profile>
             <id>java8</id>
@@ -148,6 +156,21 @@
             <artifactId>junit-platform-runner</artifactId>
             <version>1.8.0</version>
         </dependency>
+       	<dependency>
+		    <groupId>jbse</groupId>
+   			<artifactId>jbse</artifactId>
+   			<version>0.10.0</version>
+		</dependency>
+        <dependency>
+            <groupId>org.javassist</groupId>
+            <artifactId>javassist</artifactId>
+            <version>3.26.0-GA</version>
+		</dependency>		
+        <dependency>
+		    <groupId>sushi-lib</groupId>
+   			<artifactId>sushi-lib</artifactId>
+   			<version>0.2.0</version>
+		</dependency>
     </dependencies>
 
     <build>

@@ -218,7 +218,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
     }
 
     @Override
-    public void addFitnessFunction(final FitnessFunction<TestSuiteChromosome> function) {
+    public void addFitnessFunction(final FitnessFunction< TestSuiteChromosome> function){
         algorithm.addFitnessFunction(mapFitnessFunctionToTestCaseLevel(function));
     }
 
@@ -249,11 +249,11 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
      * Converts a selection function from either TestSuite or Test case level to the other
      *
      * @param function The function to be converted
-     * @param <T>      ToType of the conversion
-     * @param <X>      FromType of the conversion
+     * @param <T> ToType of the conversion
+     * @param <X> FromType of the conversion
      * @return The converted selection function.
      */
-    private static <T extends Chromosome<T>, X extends Chromosome<X>> SelectionFunction<T> mapSelectionFunction(SelectionFunction<X> function) {
+    private static<T extends Chromosome<T>, X extends Chromosome<X>> SelectionFunction<T> mapSelectionFunction(SelectionFunction<X> function){
         if (function instanceof FitnessProportionateSelection) {
             return new FitnessProportionateSelection<>((FitnessProportionateSelection<?>) function);
         } else if (function instanceof TournamentSelection) {
@@ -286,7 +286,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
         algorithm.setRankingFunction(adapteeFunction);
     }
 
-    private static <T extends Chromosome<T>, X extends Chromosome<X>> RankingFunction<T> mapRankingFunction(RankingFunction<X> function) {
+    private static<T extends Chromosome<T>, X extends Chromosome<X>> RankingFunction<T> mapRankingFunction(RankingFunction<X> function){
         if (function instanceof FastNonDominatedSorting) {
             return new FastNonDominatedSorting<>();
         } else if (function instanceof RankBasedPreferenceSorting) {
@@ -329,7 +329,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
     }
 
     @Override
-    final protected void calculateFitness() {
+    final protected void calculateFitness(){
         algorithm.calculateFitness();
     }
 
@@ -340,7 +340,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
     }
 
     @Override
-    final protected void calculateFitnessAndSortPopulation() {
+    final protected void calculateFitnessAndSortPopulation(){
         algorithm.calculateFitnessAndSortPopulation();
     }
 
@@ -381,7 +381,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
             } else {
                 throw new IllegalArgumentException("factory not supported: " + factory);
             }
-        } else {
+        } else  {
             // When we hit this branch, this TestSuiteAdapter object is currently being
             // constructed, and this method was invoked by the constructor of the super class
             // (i.e., GeneticAlgorithm). We simply do nothing.
@@ -405,10 +405,14 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
                 algorithm.setCrossOverFunction(new SinglePointFixedCrossOver<>());
             } else if (crossover instanceof SinglePointCrossOver) {
                 algorithm.setCrossOverFunction(new SinglePointCrossOver<>());
+            } else if (crossover instanceof MethodSequencesCrossOver ||  /*SUSHI: Crossover*/
+            		crossover instanceof CrosscontaminationCrossOver ||
+            		crossover instanceof MultiOperatorAlternatingCrossOver) {
+                algorithm.setCrossOverFunction((SushiCrossOver) crossover);
             } else {
                 throw new IllegalArgumentException("cannot adapt crossover " + crossover);
             }
-        } else {
+        } else  {
             // When we hit this branch, this TestSuiteAdapter object is currently being
             // constructed, and this method was invoked by the constructor of the super class
             // (i.e., GeneticAlgorithm). We simply do nothing.
@@ -425,7 +429,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
             } else if (listener instanceof RelativeSuiteLengthBloatControl) {
                 super.addListener(listener);
             } else if (listener instanceof ResourceController) {
-                if (!searchListenerMapping.containsKey(listener)) {
+                if(!searchListenerMapping.containsKey(listener)){
                     ResourceController<TestChromosome> adapteeListener = new ResourceController<>();
                     searchListenerMapping.put(listener, adapteeListener);
                     algorithm.addListener(adapteeListener);
@@ -434,6 +438,8 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
                 super.addListener(listener);
             } else if (listener instanceof ZeroFitnessStoppingCondition) {
                 super.addListener(listener);
+            } else if (listener instanceof SushiCrossOver) { /*SUSHI: Crossover*/
+                super.addListener(listener);            	
             } else {
                 throw new IllegalArgumentException("cannot adapt listener " + listener);
             }
@@ -453,7 +459,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
             } else if (listener instanceof RelativeSuiteLengthBloatControl) {
                 super.removeListener(listener);
             } else if (listener instanceof ResourceController) {
-                if (searchListenerMapping.containsKey(listener))
+                if(searchListenerMapping.containsKey(listener))
                     algorithm.removeListener(searchListenerMapping.get(listener));
             } else if (listener instanceof ProgressMonitor) {
                 super.removeListener(listener);
@@ -519,7 +525,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
      * @param limit
      * @return
      */
-    private static <T extends Chromosome<T>> PopulationLimit<T> mapPopulationLimit(PopulationLimit<?> limit) {
+    private static<T extends Chromosome<T>> PopulationLimit<T> mapPopulationLimit(PopulationLimit<?> limit){
         if (limit instanceof IndividualPopulationLimit) {
             return new IndividualPopulationLimit<>((IndividualPopulationLimit<?>) limit);
         } else if (limit instanceof StatementsPopulationLimit) {
@@ -560,11 +566,11 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
      * Exchanges the generic parameters of a Stopping condition (if possible).
      *
      * @param stoppingCondition the stopping condition with "wrong" generic parameters.
-     * @param <T>               the desired target chromosome type
+     * @param <T> the desired target chromosome type
      * @return
      */
     private static <T extends Chromosome<T>> StoppingCondition<T>
-    mapStoppingCondition(StoppingCondition<?> stoppingCondition) {
+            mapStoppingCondition(StoppingCondition<?> stoppingCondition) {
         if (stoppingCondition instanceof MaxTimeStoppingCondition) {
             return new MaxTimeStoppingCondition<>((MaxTimeStoppingCondition<?>) stoppingCondition);
         } else if (stoppingCondition instanceof TimeDeltaStoppingCondition) {
@@ -630,7 +636,7 @@ public abstract class TestSuiteAdapter<A extends GeneticAlgorithm<TestChromosome
     }
 
     @Override
-    final protected double progress() {
+    final protected double progress(){
         return algorithm.progress();
     }
 

@@ -19,6 +19,7 @@
  */
 package org.evosuite.rmi;
 
+import org.evosuite.Properties;
 import org.evosuite.rmi.service.MasterNodeImpl;
 import org.evosuite.rmi.service.MasterNodeLocal;
 import org.evosuite.rmi.service.MasterNodeRemote;
@@ -70,6 +71,23 @@ public class MasterServices {
             throw new IllegalStateException("RMI registry is already running");
         }
 
+        /* This allows for external applications to run EvoSuite after having started the registry on a given
+         * port, aiming to communicate with the EvoSuite on that port. 
+         * In this case, EvoSuite is expecting that the external application is in charge to create 
+         * the registry on localhost:<given-port> before having EvoSuite started.
+         * EvoSuite will fail if it cannot retrieve the registry.
+         */
+        if (Properties.EXTERNAL_RMI_REGISTRY_PORT > 0) { /*SUSHI */
+            try {
+                UtilsRMI.ensureRegistryOnLoopbackAddress();
+                registry = LocateRegistry.getRegistry(Properties.EXTERNAL_RMI_REGISTRY_PORT);
+                registryPort = Properties.EXTERNAL_RMI_REGISTRY_PORT;
+                return true;
+            } catch (RemoteException e) {
+            	return false;
+            }        	
+        } //else --> normal behavior of EvoSuite when started directly from users
+
         /*
          * Unfortunately, it does not seem possible to start a RMI registry on an
          * ephemeral port. So, we start with a port, and see if free. If not, try the
@@ -109,6 +127,7 @@ public class MasterServices {
         masterNode = new MasterNodeImpl(registry);
         MasterNodeRemote stub = (MasterNodeRemote) UtilsRMI.exportObject(masterNode);
         registry.rebind(MasterNodeRemote.RMI_SERVICE_NAME, stub);
+        masterNode.init();
     }
 
 
@@ -123,10 +142,11 @@ public class MasterServices {
             } catch (NoSuchObjectException e) {
                 logger.warn("Failed to delete MasterNode RMI instance", e);
             }
+            masterNode.close();
             masterNode = null;
         }
 
-        if (registry != null) {
+        if (registry != null && Properties.EXTERNAL_RMI_REGISTRY_PORT <= 0) { 
             try {
                 UnicastRemoteObject.unexportObject(registry, true);
             } catch (NoSuchObjectException e) {

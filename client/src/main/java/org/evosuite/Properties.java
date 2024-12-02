@@ -25,6 +25,7 @@ import org.evosuite.runtime.LoopCounter;
 import org.evosuite.runtime.Runtime;
 import org.evosuite.runtime.RuntimeSettings;
 import org.evosuite.runtime.sandbox.Sandbox;
+import org.evosuite.testcase.execution.EvosuiteError;
 import org.evosuite.symbolic.dse.algorithm.DSEAlgorithms;
 import org.evosuite.utils.FileIOUtils;
 import org.evosuite.utils.LoggingUtils;
@@ -707,7 +708,7 @@ public class Properties {
 	public static StoppingCondition STOPPING_CONDITION = StoppingCondition.MAXTIME;
 
 	public enum CrossoverFunction {
-		SINGLEPOINTRELATIVE, SINGLEPOINTFIXED, SINGLEPOINT, COVERAGE, UNIFORM
+		SINGLEPOINTRELATIVE, SINGLEPOINTFIXED, SINGLEPOINT, COVERAGE, UNIFORM, SUSHI_METHODSEQUENCES, SUSHI_CROSSCONTAMINATION, SUSHI_HYBRID /*SUSHI: Crossover*/
 	}
 
 	@Parameter(key = "crossover_function", group = "Search Algorithm", description = "Crossover function during search")
@@ -1545,7 +1546,8 @@ public class Properties {
 		EXCEPTION, DEFUSE, ALLDEFS, BRANCH, CBRANCH, STRONGMUTATION, WEAKMUTATION,
 		MUTATION, STATEMENT, RHO, AMBIGUITY, IBRANCH, READABILITY,
         ONLYBRANCH, ONLYMUTATION, METHODTRACE, METHOD, METHODNOEXCEPTION, LINE, ONLYLINE, OUTPUT, INPUT,
-        TRYCATCH
+        TRYCATCH, PATHCONDITION  /*SUSHI: Path condition fitness*/, BRANCH_WITH_AIDING_PATH_CONDITIONS /*SUSHI: Path condition fitness*/,
+        SEEPEP /*SEEPEP: DAG coverage*/
 	}
 
     @Parameter(key = "criterion", group = "Runtime", description = "Coverage criterion. Can define more than one criterion by using a ':' separated list")
@@ -1557,14 +1559,111 @@ public class Properties {
 	@Parameter(key = "max_subclasses_per_class", group = "Test Creation", description = "The maximum amount of sub-classes from which we can select the generators for a depended class (in particular this applies for each non-concrete depended class) out of all possible subclasses. The possibile generator-classes are selected in order of package distance, until overcoming this threshold. A value of 0 (default) means that only the generators with minimum distance will be selected.")
 	public static int MAX_SUBCLASSES_PER_CLASS = 0;/*GIO: allowing further available generators */
 
-	/** Constant <code>AVOID_REPLICAS_OF_INDIVIDUALS=""</code> */
+    /** Constant <code>SEEPEP_GOAL_PROVIDER=""</code> */
+	@Parameter(key = "seepep_goal_provider", group = "SEEPEP", description = "The seepep-dags to be used as objective functions. Can define more than one criterion by using a ':' separated list")
+	public static String SEEPEP_GOAL_PROVIDER = null;/*SEEPEP: DAG coverage*/
+
+	/** Constant <code>SEEPEP_ENTRY_METHOD=""</code> */
+	@Parameter(key = "seepep_entry_method", group = "SEEPEP", description = "The entry method considered in SEEPEP")
+	public static String SEEPEP_ENTRY_METHOD = "main([java/lang/String;)V";/*SEEPEP: DAG coverage*/
+
+	/** Constant <code>SEEPEP_TEST_OUTOFBOUND_PATHS=""</code> */
+	@Parameter(key = "seepep_test_outofbound_paths", group = "SEEPEP", description = "Allow test cases that cover seepep-dags by executing path conditions of out-of-bounds symbolic traces")
+	public static boolean SEEPEP_TEST_OUTOFBOUND_PATHS = false;/*SEEPEP: DAG coverage*/
+
+	/** Constant <code>PATH_CONDITION=""</code> */
+	@Parameter(key = "path_condition", group = "SUSHI", description = "The path conditions to be used as objective functions. Can define more than one criterion by using a ':' separated list")
+	public static String[] PATH_CONDITION = new String[] {};/*SUSHI: Path condition fitness*/
+
+	public static String[] pathConditionSplitClassMethodEvaluator(String pathCondition) { /*SUSHI: Path condition fitness*/
+		String[] parts = pathCondition.split(",");
+		if (parts.length != 3) {
+			throw new EvosuiteError("Badly formed path condition: " + pathCondition);
+		}
+		return parts;
+	}
+
+	/** Constant <code>PATH_CONDITION_BRANCH_COVERAGE_INFO=""</code> */
+	@Parameter(key = "path_condition_branch_coverage_info", group = "SUSHI", description = "When using path condition fitness in conjunction with branch fitness function, we may optionally provide the files with the branch coverage information (in SUSHI format, i.e., ) for the path conditions. The parameter must include two file names \"<tracesFileName>:<branchesFileName>\"")
+	public static String[] PATH_CONDITION_SUSHI_BRANCH_COVERAGE_INFO = null; /*SUSHI: Combining path and branch coverage */
+
+	/** Constant <code>PATH_CONDITION_TARGET=""</code> */
+	@Parameter(key = "path_condition_target", group = "SUSHI", description = "When using path condition fitness, the fitness of a test case is measured only with reference to first/last/best time that the test case calls the target method. If set to best (default), the fitness corresponds to the minimum fitness measured across all calls in the test case.")
+	public static PathConditionTarget PATH_CONDITION_TARGET = PathConditionTarget.BEST; /*SUSHI: Path condition fitness*/
+
+	public enum PathConditionTarget {BEST, FIRST_ONLY, LAST_ONLY} /*SUSHI: Path condition fitness*/
+
+	/** Constant <code>PATH_CONDITION_CHECK_AT_METHOD_EXIT=""</code> */
+	@Parameter(key = "path_condition_check_at_method_exit", group = "SUSHI", description = "When using path condition fitness, the fitness of a test case is measured after the corresponding method terminates, as opposite of the default behavior that checks the path condition against the method parameters at the invocation of the method")
+	public static boolean PATH_CONDITION_CHECK_AT_METHOD_EXIT = false;/*SUSHI: Path condition fitness*/
+
+	/** Constant <code>POST_CONDITION_CHECK=""</code> */
+	@Parameter(key = "post_condition_check", group = "SUSHI", description = "When using path condition fitness, the fitness of a test case is measured with reference to both the provided path condition (test0 in the evaluator) and the provided post condition (test1 in the evaluator). The path condition is evaluated at the entry of the method, and the post condition is evaluated after the corresponding method terminates.")
+	public static boolean POST_CONDITION_CHECK = false; /*SUSHI: Path condition fitness*/
+	
+	/** Constant <code>CHECK_PATH_CONDITIONS_ONLY_FOR_DIRECT_CALLS=""</code> */
+	@Parameter(key = "check_path_conditions_only_for_direct_calls", group = "SUSHI", description = "When using path condition fitness, the path condititions are checked also for indirect calls, otherwise they are checked only for target methods called directly from test cases")
+	public static boolean CHECK_PATH_CONDITIONS_ONLY_FOR_DIRECT_CALLS = false; /*SUSHI: Path condition fitness*/
+	
+	/** Constant <code>EXTERNAL_RMI_REGISTRY_PORT=""</code> */
+	@Parameter(key = "external_rmi_registry_port", group = "SUSHI", description = "Allows for an external program to start the RMI registry before executing EvoSuite, and then have EvoSuite connecting to that registry instead of starting its own one. Used when providing a test lister as an RMI object")
+	public static int EXTERNAL_RMI_REGISTRY_PORT = -1; /*SUSHI: Path condition fitness*/
+
+	/** Constant <code>TEST_LISTENER_RMI_IDENTIFIER=""</code> */
+	@Parameter(key = "test_listener_rmi_identifier", group = "SUSHI", description = "Allows for registering a test lister, which must be an RMI object registered with the given identifier in the Registry")
+	public static String TEST_LISTENER_RMI_IDENTIFIER = null; /*SUSHI: Path condition fitness*/
+
+	/** Constant <code>INJECTED_PATH_CONDITIONS_CHECKING_RATE=""</code> */
+	@Parameter(key = "injected_path_conditions_checking_rate", group = "SUSHI", description = "When using path condition fitness, check if newly path conditions where injected at the evosuite rmi server, at regualar intervals of number of iterations as defined by this parameter. If 0, do not check.")
+	public static int INJECTED_PATH_CONDITIONS_CHECKING_RATE = 0; /*SUSHI: Path condition fitness*/
+
+	/** Constant <code>DISMISS_PATH_CONDITIONS_NO_IMPROVE_ITERATIONS=""</code> */
+	@Parameter(key = "dismiss_path_conditions_no_improve_iterations", group = "SUSHI", description = "When using path condition fitness, discard t. If 0, do not check.")
+	public static int DISMISS_PATH_CONDITIONS_NO_IMPROVE_ITERATIONS = 0; /*SUSHI: Path condition fitness*/
+	
+	/** Constant <code>SUSHI_STATISTICS=""</code> */
+	@Parameter(key = "sushi_statistics", group = "SUSHI", description = "Print sushi statistics upon termination")
+	public static boolean SUSHI_STATISTICS = false; /*SUSHI: Statistics*/
+
+	/** Constant <code>USE_MINIMIZER_DURING_CROSSOVER=""</code> */
+	@Parameter(key = "use_minimizer_during_crossover", group = "SUSHI", description = "Call minimizer when crossover generates tests that are too lareg but have good fitness ")
+	public static boolean USE_MINIMIZER_DURING_CROSSOVER = false; /*SUSHI: Minimizer*/
+
+	/** Constant <code>SUSHI_MODIFIERS_LOCAL_SEARCH=""</code> */
+	@Parameter(key = "sushi_modifiers_local_search", group = "SUSHI", description = "Does a local seacrh on test cases by trying to reuse the modifiers that were identified as successful during crossover")
+	public static boolean SUSHI_MODIFIERS_LOCAL_SEARCH = false; /*SUSHI: Local search*/
+
+	/** Constant <code>EMIT_TESTS_INCREMENTALLY=""</code> */
+	@Parameter(key = "emit_tests_incrementally", group = "SUSHI", description = "During search, immediately emit (as a junit test) a test case that optimize an objective.")
+	public static boolean EMIT_TESTS_INCREMENTALLY = false; /*SUSHI: Incremental test cases*/
+
+    @Parameter(key = "emit_tests_for_criterion", group = "SUSHI", description = "The objectives fro which shall emit test  cases incrementally. Can define more than one criterion by using a ':' separated list")
+    public static Criterion[] EMIT_TESTS_FOR_CRITERION = null;
+
+    /** Constant <code>AVOID_REPLICAS_OF_INDIVIDUALS=""</code> */
 	@Parameter(key = "avoid_replicas_of_individuals", group = "Test Creation", description = "Prevent multiple copies of the same individuals while forming new generations")
 	public static boolean AVOID_REPLICAS_OF_INDIVIDUALS = false; /*GIO: Prevent multiple copies of individuals*/
-	
+
 	/** Constant <code>NO_CHANGE_ITERATIONS_BEFORE_RESET=""</code> */
 	@Parameter(key = "no_change_iterations_before_reset", group = "Test Creation", description = "If no individual changes for these iterations, keep elite and reset the population (0 means never-reset ")
 	public static int NO_CHANGE_ITERATIONS_BEFORE_RESET = 0; /*GIO: Reset*/
-	
+
+	/** Constant <code>PATH_CONDITION_EVALUATORS_DIR=""</code> */
+	@Parameter(key = "path_condition_evaluators_dir", group = "SUSHI", description = "A directory to store the evaluators of path-condition fitness functions (aka EvoSuiteWrapper)")
+	public static String PATH_CONDITION_EVALUATORS_DIR = null; /*SUSHI: Path condition fitness*/
+
+	/** Constant <code>TMP_TEST_DIR=""</code> */
+	@Parameter(key = "tmp_test_dir", group = "SUSHI", description = "A directory to store the temporary test cases (sources and binaries) to guide JBSE to compute aiding path conditions")
+	public static String TMP_TEST_DIR = null; /*SUSHI: Aiding path conditions*/
+
+	/** Constant <code>APC_RATE=""</code> */
+	@Parameter(key = "apc_rate", group = "SUSHI", description = "The iteration-rate for checking for branches that may need aiding path conditions")
+	public static int APC_RATE = 0; /*SUSHI: Aiding path conditions*/
+
+	/** Constant <code>APC_MAX=""</code> */
+	@Parameter(key = "apc_max", group = "SUSHI", description = "The maximum number of simultaneous aiding path conditions that can be considered")
+	public static int APC_MAX = 15; /*SUSHI: Aiding path conditions*/
+
     /**
      * Cache target class
      */

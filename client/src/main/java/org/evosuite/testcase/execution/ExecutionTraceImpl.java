@@ -21,6 +21,7 @@ package org.evosuite.testcase.execution;
 
 import org.evosuite.Properties;
 import org.evosuite.Properties.Criterion;
+import org.evosuite.Properties.PathConditionTarget;
 import org.evosuite.TestGenerationContext;
 import org.evosuite.coverage.branch.Branch;
 import org.evosuite.coverage.branch.BranchPool;
@@ -28,6 +29,8 @@ import org.evosuite.coverage.dataflow.DefUse;
 import org.evosuite.coverage.dataflow.DefUsePool;
 import org.evosuite.coverage.dataflow.Definition;
 import org.evosuite.coverage.dataflow.Use;
+import org.evosuite.coverage.seepep.SeepepTraceItem;
+import org.evosuite.coverage.seepep.SparkMethodSignatures;
 import org.evosuite.setup.CallContext;
 import org.evosuite.statistics.RuntimeVariable;
 import org.evosuite.utils.ArrayUtil;
@@ -97,6 +100,8 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 	public static boolean traceCalls = false;
 
 	public static boolean disableContext = false;
+	
+	public static boolean seepepTracingEnabled = false; /*SEEPEP: DAG coverage*/
 
     /**
      * Constant <code>traceCoverage=true</code>
@@ -144,6 +149,10 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 		return traceCalls;
 	}
 
+	public static void enableSeepepTracing() { /*SEEPEP: DAG coverage*/
+		seepepTracingEnabled = true;
+	}
+
 	/**
 	 * <p>
 	 * enableTraceCoverage
@@ -188,6 +197,22 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 			}
 		}
 	}
+
+	// trace of traversed lines
+	private List<SeepepTraceItem> traversedSeepepItems = 
+			new LinkedList<SeepepTraceItem>(); /*SEEPEP: DAG coverage*/
+	private SeepepTraceItem lastTraversedSeepepItem = null; /*SEEPEP: DAG coverage*/
+	private boolean seepepDone = false;
+	@Override
+	public boolean checkSetSeepepDone(boolean done) {
+		boolean check = seepepDone;
+		seepepDone = done;
+		return check;
+	}
+	private int noLineTrackingNestedCalls = 0;
+	private Deque<Integer> lastTraversedLine = new LinkedList<>(); /*SEEPEP: DAG coverage*/
+	private Deque<String> lastTraversedClass = new LinkedList<>(); /*SEEPEP: DAG coverage*/
+	private Map<String, Integer> actionTraversalCount = new HashMap<>(); /*SEEPEP: DAG coverage*/
 
 	private List<BranchEval> branchesTrace = new ArrayList<>();
 
@@ -261,6 +286,26 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 
 	private final Map<Integer, Double> trueDistancesSum = Collections.synchronizedMap(new HashMap<>());
 
+	public Map<Integer, Double> pathConditionDistances = Collections.synchronizedMap(new HashMap<>());/*SUSHI: Path condition fitness*/
+	public Map<Integer, ArrayList<Object>> pathConditionFeedbacks = Collections.synchronizedMap(new HashMap<>());/*SUSHI: Path condition fitness*/
+	public Map<Integer /*branchId*/, Set<Integer> /*related pcIds*/> pathConditionBranchRelations = Collections.synchronizedMap(new HashMap<>());/*SUSHI: Path condition fitness*/
+	public Map<Integer, Double> pathConditionRelatedBranchDistance = Collections.synchronizedMap(new HashMap<>());/*SUSHI: Path condition fitness*/
+	private class methodInfo {
+		String className;
+		String methodNameAndDescription;
+		public methodInfo(String className, String methodNameAndDescription) {
+			this.className = className;
+			this.methodNameAndDescription = methodNameAndDescription;
+		}
+		public String getClassName() {
+			return className;
+		}
+		public String getMethodNameAndDescription() {
+			return methodNameAndDescription;
+		}		
+	}
+	public List<methodInfo> methodsWithEvaluatedPathConditions = Collections.synchronizedList(new ArrayList<>());
+
 	public static Set<Integer> gradientBranches = Collections.synchronizedSet(new HashSet<>());
 
 	public static Set<Integer> gradientBranchesCoveredTrue = Collections.synchronizedSet(new HashSet<>());
@@ -276,6 +321,7 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 	public static Map<RuntimeVariable, Set<Integer>> bytecodeInstructionCoveredFalse = Collections
 			.synchronizedMap(new HashMap<>());
 
+	private final boolean trackBranchToPathConditionRelations;
 	/**
 	 * <p>
 	 * Constructor for ExecutionTraceImpl.
@@ -283,6 +329,8 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 	 */
 	public ExecutionTraceImpl() {
 		stack.add(new MethodCall("", "", 0, 0, 0)); // Main method
+		trackBranchToPathConditionRelations = 
+				ArrayUtil.contains(Properties.CRITERION, Criterion.BRANCH_WITH_AIDING_PATH_CONDITIONS);
 	}
 
 	/**
@@ -477,6 +525,23 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 		// This requires a lot of memory and should not really be used
 		if (Properties.BRANCH_EVAL) {
 			branchesTrace.add(new BranchEval(branch, true_distance, false_distance));
+		}
+		
+		if (trackBranchToPathConditionRelations && pathConditionBranchRelations.containsKey(branch)) {
+			/* Here we shall track the currendDistance as the distance from the uncovered side of the branch.
+			 * If (conversely) the branch is covered, we let the fitness function bes responsible of computing the fitness as 0. */
+			double currentDistance = Math.max(true_distance, false_distance);
+			for (int pathConditionId: pathConditionBranchRelations.get(branch)) {
+				synchronized (pathConditionRelatedBranchDistance) {
+					Double latestDistance = pathConditionRelatedBranchDistance.get(pathConditionId);
+					if (latestDistance == null) {
+						latestDistance = Double.MAX_VALUE;
+					}
+					if (currentDistance < latestDistance) {
+						pathConditionRelatedBranchDistance.put(pathConditionId, currentDistance);
+					}
+				}
+			}
 		}
 	}
 
@@ -687,6 +752,28 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 	@Override
 	public void enteredMethod(String className, String methodName, Object caller) {
 		if (stack.size() > 4000) throw new Error("TERMINATED");//TODO: GIO: in general we want to avoid test cases with cyclic test structures, e.g., in the closure01 experiments
+		if (seepepTracingEnabled) {
+			if (className.equals("esem.sandbox.Utils") ||
+					SparkMethodSignatures._I().isSparkMethodDots(	className, methodName)) {
+				/*				!className.startsWith("esem.sandbox") && //TODO: generalize this
+				!className.startsWith("org.apache.spark.api.java") &&
+				!className.startsWith("jbse") && !methodName.startsWith("apply") &&
+				!methodName.startsWith("aggregateMessages_helper_computeVerticesFromTriplets") &&
+				!methodName.startsWith("computeTriplets") &&
+				!methodName.startsWith("fromEdges_helper_computeVerticesFromEdges") &&
+				!methodName.startsWith("groupEdges_helper_computeGroupedEdgesFromEdges") && 
+				!(className.equals("org.apache.spark.graphx.VertexRDD") && methodName.startsWith("innerJoin")) && 
+				!(className.equals("org.apache.spark.graphx.VertexRDD") && methodName.startsWith("leftOuterJoin")) && 
+				!(className.equals("org.apache.spark.graphx.VertexRDD") && methodName.startsWith("map"))) */
+				
+				noLineTrackingNestedCalls++;
+			}
+			if (noLineTrackingNestedCalls == 0) {
+				lastTraversedLine.addLast(-1);
+				lastTraversedClass.addLast(className);
+				//LoggingUtils.getEvoLogger().info("**logging call to method: {}", className + "::" + methodName + " called from: " + lastTraversedLine.getLast());
+			}
+		}
 		if (traceCoverage) {
 			String id = className + "." + methodName;
 			if (!coveredMethods.containsKey(id)) {
@@ -798,6 +885,29 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 	 */
 	@Override
 	public void exitMethod(String classname, String methodname) {
+		if (seepepTracingEnabled) {
+			if (noLineTrackingNestedCalls == 0) {
+				lastTraversedLine.removeLast();
+				lastTraversedClass.removeLast();
+				//LoggingUtils.getEvoLogger().info("***exiting call to method: {}", classname + "::" + methodname + " called from: " + lastTraversedLine.getLast());
+			}
+			if (classname.equals("esem.sandbox.Utils") ||
+					SparkMethodSignatures._I().isSparkMethodDots(classname, methodname)) {
+				/*				!className.startsWith("esem.sandbox") && //TODO: generalize this
+				!className.startsWith("org.apache.spark.api.java") &&
+				!className.startsWith("jbse") && !methodName.startsWith("apply") &&
+				!methodName.startsWith("aggregateMessages_helper_computeVerticesFromTriplets") &&
+				!methodName.startsWith("computeTriplets") &&
+				!methodName.startsWith("fromEdges_helper_computeVerticesFromEdges") &&
+				!methodName.startsWith("groupEdges_helper_computeGroupedEdgesFromEdges") && 
+				!(className.equals("org.apache.spark.graphx.VertexRDD") && methodName.startsWith("innerJoin")) && 
+				!(className.equals("org.apache.spark.graphx.VertexRDD") && methodName.startsWith("leftOuterJoin")) && 
+				!(className.equals("org.apache.spark.graphx.VertexRDD") && methodName.startsWith("map"))) */
+
+				noLineTrackingNestedCalls--;
+			}
+		}
+
 		if (!classname.isEmpty() && !methodname.isEmpty()) {
 			// if(traceCalls) {
 				if (!stack.isEmpty() && !(stack.peek().methodName.equals(methodname))) {
@@ -1429,6 +1539,28 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 	 */
 	@Override
 	public void linePassed(String className, String methodName, int line) {
+		if (seepepTracingEnabled) { /*SEEPEP: DAG coverage*/
+			if (noLineTrackingNestedCalls == 0) {
+				lastTraversedLine.removeLast();
+				lastTraversedLine.addLast(line);
+			}
+			if (lastTraversedSeepepItem != null) {
+				String actionId = lastTraversedSeepepItem.getIdentifier() + "_&_" + lastTraversedClass.getLast() + "_&_" + lastTraversedLine.getLast();
+				if (lastTraversedSeepepItem.isAction()) {
+					Integer traversals = actionTraversalCount.get(actionId);
+					if (traversals == null) {
+						traversals = 0;
+					} else {
+						++traversals;
+					}
+					actionTraversalCount.put(actionId, traversals);
+					actionId = actionId + "_" + traversals;
+				} 
+				lastTraversedSeepepItem.rename(actionId);
+				traversedSeepepItems.add(lastTraversedSeepepItem);
+				lastTraversedSeepepItem = null;
+			}
+		}
 		if (traceCalls) {
 			if (stack.isEmpty()) {
 				logger.warn("Method stack is empty: " + className + "." + methodName + " - l" + line); 
@@ -1901,6 +2033,221 @@ public class ExecutionTraceImpl implements ExecutionTrace, Cloneable {
 	@Override
 	public List<String> getInitializedClasses() {
 		return this.initializedClasses;
+	}
+	
+	public static class PathConditionEvaluationInfo { /*SUSHI: Path condition fitness*/
+		final String className;
+		final String methodName;
+		final Map<Integer, Double> distances;
+		public PathConditionEvaluationInfo(String className, String methodName) {
+			this.className = className;
+			this.methodName = methodName;
+			this.distances = Collections.synchronizedMap(new HashMap<Integer, Double>());
+		}
+		public String toString() { //for debugging purpose
+			return className + "." + methodName + "::" + distances;
+		}
+	}
+
+	private boolean isEvaluatingPathConditions = false;
+	private List<PathConditionEvaluationInfo> pathConditionEvaluationStack = Collections.synchronizedList(new ArrayList<PathConditionEvaluationInfo>());
+	private static final boolean debugInfoEnabled = false;
+	private List<String> pathConditionEvaluationStack_debugInfo = Collections.synchronizedList(new ArrayList<String>());
+	
+	@Override
+	public void evaluatingPathConditionsBegin(String className, String methodName) {
+		isEvaluatingPathConditions = true;
+		if (Properties.POST_CONDITION_CHECK) {
+			synchronized (pathConditionEvaluationStack) {
+				pathConditionEvaluationStack.add(0, new PathConditionEvaluationInfo(className, methodName));
+				if (debugInfoEnabled) {
+					pathConditionEvaluationStack_debugInfo.add(0, "pre-condition: " + className + "." + methodName);
+				}
+			}
+			//LoggingUtils.getEvoLogger().info("-- ENTERING PCs for:{} :: {} :: {}", className, methodName);
+		}
+	}
+	
+	@Override
+	public boolean isEvaluatingPathConditions() {
+		return isEvaluatingPathConditions;
+	}
+	
+
+	@Override
+	public String[] getMethodInfoForLatestPathCondition() {
+		if (pathConditionEvaluationStack.isEmpty()) {
+			throw new EvosuiteError("Unexpected sequence when evaluating pre- and post-condition, "
+					+ "as we are asking for the method of the latest evalauted path condition, while in fact "
+					+ "the stack of methods with evalauted preconditons is empty");
+		}
+		String retVal[] = new String[2];
+		retVal[0] = pathConditionEvaluationStack.get(0).className;
+		retVal[1] = pathConditionEvaluationStack.get(0).methodName;
+		return retVal;
+	}
+
+	@Override
+	public List<PathConditionEvaluationInfo> getPathConditionEvaluationStack() {
+		return new ArrayList<>(pathConditionEvaluationStack);
+	}
+
+	@Override
+	public void passedPathCondition(int pathConditionId, int relatedBranchId, double distance, ArrayList<Object> feedback) { /*SUSHI: Path condition fitness*/
+		//LoggingUtils.getEvoLogger().info("--path condition distance is d: " + distance + ", pc = " + pathConditionID);
+		if (Properties.POST_CONDITION_CHECK) {
+			pathConditionEvaluationStack.get(0).distances.put(pathConditionId, distance);
+			return;
+		}
+		if (trackBranchToPathConditionRelations) {
+			synchronized (pathConditionBranchRelations) {
+				if (!pathConditionBranchRelations.containsKey(relatedBranchId)) {
+					pathConditionBranchRelations.put(relatedBranchId, new HashSet<>());
+				}
+			}
+			pathConditionBranchRelations.get(relatedBranchId).add(pathConditionId); //set the relation, if not done yet
+		}
+		synchronized (pathConditionDistances) {
+			Double currentDistance = pathConditionDistances.get(pathConditionId);
+			if (currentDistance == null
+					|| (Properties.PATH_CONDITION_TARGET == PathConditionTarget.BEST && distance <= distance)
+					|| Properties.PATH_CONDITION_TARGET == PathConditionTarget.LAST_ONLY
+					/* else PathConditionTarget.FIRST_ONLY, we keep the first measured value */
+					) {
+				pathConditionDistances.put(pathConditionId, distance);
+				if (feedback != null) {
+					pathConditionFeedbacks.put(pathConditionId, feedback);
+				}
+				if (trackBranchToPathConditionRelations) {
+					pathConditionRelatedBranchDistance.remove(pathConditionId); //as we are now measuring for a new path-condition, the corresponding branch is to be met yet 
+				}
+			}
+		}
+	}
+
+	@Override
+	public void evaluatingPathConditionsDone(String className, String methodName) {
+		isEvaluatingPathConditions = false;
+		//LoggingUtils.getEvoLogger().info("DONE WITH: ENTERING PCs for:{} :: {} :: {}", className, methodName);
+	}
+	
+	@Override
+	public void evaluatingPostConditionsBegin(String className, String methodName) {
+		if (pathConditionEvaluationStack.isEmpty()) {
+			throw new EvosuiteError("Unexpected sequence of pre- and post-condition, "
+					+ "as we are being asked for evalauting a post-condition for method "
+					+ className + "." + methodName
+					+ ", but unfortunately the stack of methods with evaluated pre-conditons is empty" + 
+					(debugInfoEnabled ? seenSequenceOfPreAndPostConditions(className, methodName) : ""));
+		}
+		if (pathConditionEvaluationStack.get(0).className.equals(className) && 
+				pathConditionEvaluationStack.get(0).methodName.equals(methodName)) {
+			isEvaluatingPathConditions = true;
+			//LoggingUtils.getEvoLogger().info("-- POST for:{} :: {} :: {}", className, methodName);
+		} else {
+			throw new EvosuiteError("Unexpected sequence when evaluating post-condition, "
+					+ "as the stored precodition is expected for method " + className + "." + methodName
+					+ " while in fact it is for method " + pathConditionEvaluationStack.get(0).className + "." 
+					+ pathConditionEvaluationStack.get(0).methodName + 
+					(debugInfoEnabled ? seenSequenceOfPreAndPostConditions(className, methodName) : ""));
+		}		
+	}
+
+	@Override
+	public void passedPostCondition(int pathConditionID, double distance) { /*SUSHI: Path condition fitness*/
+		//LoggingUtils.getEvoLogger().info("--post condition distance is d: " + distance + ", pc = " + pathConditionID);
+		Double tempDistance = pathConditionEvaluationStack.get(0).distances.get(pathConditionID);
+		if (tempDistance == null) {
+			throw new EvosuiteError("Unexpected sequence when evaluating post-condition, "
+					+ "since there is no temporarily stored distance for the precodition that "
+					+ "relates to path condition with id = " + pathConditionID);
+		} else if (tempDistance < 0) {
+			throw new EvosuiteError("Unexpected negative distance (" + tempDistance + ") "
+					+ "when evaluating the post-condition that "
+					+ "relates to path condition with id = " + pathConditionID);
+			
+		} else if (tempDistance > 0) {
+			distance = tempDistance + 1d; //the precondition did not converge yet, thus we add the maximum 1 as post-condition distance
+		} else { //tempDistance == 0
+			distance = distance / (1 + distance); //the precondition converged already, thus the distance corresponds to the post-condition distance normalized in interval (0, 1)
+		}
+		//LoggingUtils.getEvoLogger().info("    ** Evaluator post on:{} = {} --> {}", pathConditionID, tempDistance, distance);	
+		
+		synchronized (pathConditionDistances) {
+			Double currentDistance = pathConditionDistances.get(pathConditionID);
+			if (currentDistance == null) {
+				pathConditionDistances.put(pathConditionID, distance);
+			} else if (Properties.PATH_CONDITION_TARGET != PathConditionTarget.FIRST_ONLY) {				
+				if (Properties.PATH_CONDITION_TARGET == PathConditionTarget.BEST) {
+					distance = Math.min(currentDistance, distance);
+				} /* else PathConditionTarget.LAST_ONLY, meaning that the new value must replace the old one*/
+				
+				pathConditionDistances.put(pathConditionID, distance);			
+			} /* else PathConditionTarget.FIRST_ONLY, we keep the first measured value */
+		}
+	}
+
+	private String seenSequenceOfPreAndPostConditions(String className, String methodName) {
+		String s = "";
+		for (String info: pathConditionEvaluationStack_debugInfo) {
+			s += info + "\n";
+		} 
+		s += "post-condition: " + className + "." + methodName + "\n";
+		return s;
+	}
+	
+	@Override
+	public void evaluatingPostConditionsDone(String className, String methodName) {
+		if (pathConditionEvaluationStack.isEmpty()) {
+			
+			throw new EvosuiteError("Unexpected sequence when evaluating pre- and post-condition, "
+					+ "as we are asking for the evalauting a post condition, while in fact "
+					+ "the stack of methods with evalauted preconditons is empty" + 
+					(debugInfoEnabled ? seenSequenceOfPreAndPostConditions(className, methodName) : ""));
+		}
+		isEvaluatingPathConditions = false;
+		synchronized (pathConditionEvaluationStack) {
+			pathConditionEvaluationStack.remove(0);
+			if (debugInfoEnabled) {
+				pathConditionEvaluationStack_debugInfo.remove(0);
+			}
+		}
+		//LoggingUtils.getEvoLogger().info("DONE WITH: POST for:{} :: {} :: {}", className, methodName);
+	}
+
+	@Override
+	public Map<Integer, Double> getPathConditionDistances() { /*SUSHI: Path condition fitness*/
+		return pathConditionDistances;
+	}
+	
+	@Override
+	public Map<Integer, ArrayList<Object>> getPathConditionFeedbacks() { /*SUSHI: Path condition fitness*/
+		return pathConditionFeedbacks;
+	}
+	
+	@Override
+	public Map<Integer, Double> getPathConditionRelatedBranchDistance() { /*SUSHI: Path condition fitness*/
+		return pathConditionRelatedBranchDistance;
+	}
+
+
+	@Override
+	public void passedSeepepItem(SeepepTraceItem seepepTraceItem) {  /*SEEPEP: DAG coverage*/
+		if (seepepTracingEnabled) {
+			if (seepepTraceItem.isTraceStartMarker() || seepepTraceItem.isInputParameter()) {
+				traversedSeepepItems.add(seepepTraceItem);
+				if (seepepTraceItem.isTraceStartMarker()) {
+					this.actionTraversalCount.clear();
+				}
+			} else {
+				lastTraversedSeepepItem = seepepTraceItem;
+			}
+		}
+	}
+
+	@Override
+	public List<SeepepTraceItem> getTraversedSeepepItems() { /*SEEPEP: DAG coverage*/
+		return traversedSeepepItems;
 	}
 
 }

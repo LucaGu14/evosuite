@@ -26,6 +26,7 @@ import org.evosuite.instrumentation.coverage.BranchInstrumentation;
 import org.evosuite.instrumentation.coverage.DefUseInstrumentation;
 import org.evosuite.instrumentation.coverage.MethodInstrumentation;
 import org.evosuite.instrumentation.coverage.MutationInstrumentation;
+import org.evosuite.instrumentation.coverage.PathConditonInstrumentation;
 import org.evosuite.runtime.annotation.EvoSuiteExclude;
 import org.evosuite.runtime.classhandling.ClassResetter;
 import org.evosuite.runtime.instrumentation.AnnotatedMethodNode;
@@ -47,52 +48,52 @@ import java.util.*;
  * <p>
  * defUse, concurrency and LCSAJs instrumentation is also added (if the
  * properties are set).
- *
+ * 
  * @author Gordon Fraser
  */
 public class CFGMethodAdapter extends MethodVisitor {
 
-    private static final Logger logger = LoggerFactory.getLogger(CFGMethodAdapter.class);
+	private static final Logger logger = LoggerFactory.getLogger(CFGMethodAdapter.class);
 
-    /**
-     * A list of Strings representing method signatures. Methods matching those
-     * signatures are not instrumented and no CFG is generated for them. Except
-     * if some MethodInstrumentation requests it.
-     */
-    public static final List<String> EXCLUDE = Arrays.asList("<clinit>()V",
-            ClassResetter.STATIC_RESET + "()V",
-            ClassResetter.STATIC_RESET);
-    /**
-     * The set of all methods which can be used during test case generation This
-     * excludes e.g. synthetic, initializers, private and deprecated methods
-     */
-    public static Map<ClassLoader, Map<String, Set<String>>> methods = new HashMap<>();
+	/**
+	 * A list of Strings representing method signatures. Methods matching those
+	 * signatures are not instrumented and no CFG is generated for them. Except
+	 * if some MethodInstrumentation requests it.
+	 */
+	public static final List<String> EXCLUDE = Arrays.asList("<clinit>()V",
+																ClassResetter.STATIC_RESET+"()V",
+																ClassResetter.STATIC_RESET);
+	/**
+	 * The set of all methods which can be used during test case generation This
+	 * excludes e.g. synthetic, initializers, private and deprecated methods
+	 */
+	public static Map<ClassLoader,Map<String, Set<String>>> methods = new HashMap<>();
 
-    /**
-     * This is the name + the description of the method. It is more like the
-     * signature and less like the name. The name of the method can be found in
-     * this.plain_name
-     */
-    private final String methodName;
+	/**
+	 * This is the name + the description of the method. It is more like the
+	 * signature and less like the name. The name of the method can be found in
+	 * this.plain_name
+	 */
+	private final String methodName;
 
-    private final MethodVisitor next;
-    private final String plain_name;
-    private final int access;
-    private final String className;
-    private final ClassLoader classLoader;
+	private final MethodVisitor next;
+	private final String plain_name;
+	private final int access;
+	private final String className;
+	private final ClassLoader classLoader;
 
-    private int lineNumber = 0;
-
+	private int lineNumber = 0;
+	
     /**
      * Can be set by annotation
      */
-    private boolean excludeMethod = false;
+	private boolean excludeMethod = false;
 
-    /**
-     * <p>
-     * Constructor for CFGMethodAdapter.
-     * </p>
-     *
+	/**
+	 * <p>
+	 * Constructor for CFGMethodAdapter.
+	 * </p>
+	 * 
      * @param className  a {@link java.lang.String} object.
      * @param access     a int.
      * @param name       a {@link java.lang.String} object.
@@ -100,343 +101,349 @@ public class CFGMethodAdapter extends MethodVisitor {
      * @param signature  a {@link java.lang.String} object.
      * @param exceptions an array of {@link java.lang.String} objects.
      * @param mv         a {@link org.objectweb.asm.MethodVisitor} object.
-     */
-    public CFGMethodAdapter(ClassLoader classLoader, String className, int access,
-                            String name, String desc, String signature, String[] exceptions,
-                            MethodVisitor mv) {
+	 */
+	public CFGMethodAdapter(ClassLoader classLoader, String className, int access,
+	        String name, String desc, String signature, String[] exceptions,
+	        MethodVisitor mv) {
 
-        // super(new MethodNode(access, name, desc, signature, exceptions),
-        // className,
-        // name.replace('/', '.'), null, desc);
+		// super(new MethodNode(access, name, desc, signature, exceptions),
+		// className,
+		// name.replace('/', '.'), null, desc);
 
-        super(Opcodes.ASM9, new AnnotatedMethodNode(access, name, desc, signature,
-                exceptions));
+		super(Opcodes.ASM9, new AnnotatedMethodNode(access, name, desc, signature,
+		        exceptions));
 
-        this.next = mv;
-        this.className = className; // .replace('/', '.');
-        this.access = access;
-        this.methodName = name + desc;
-        this.plain_name = name;
-        this.classLoader = classLoader;
+		this.next = mv;
+		this.className = className; // .replace('/', '.');
+		this.access = access;
+		this.methodName = name + desc;
+		this.plain_name = name;
+		this.classLoader = classLoader;
 
-        if (!methods.containsKey(classLoader))
-            methods.put(classLoader, new HashMap<>());
-    }
+		if(!methods.containsKey(classLoader))
+			methods.put(classLoader, new HashMap<>());
+	}
 
-    /* (non-Javadoc)
-     * @see org.objectweb.asm.MethodVisitor#visitLineNumber(int, org.objectweb.asm.Label)
-     */
-    @Override
-    public void visitLineNumber(int line, Label start) {
-        lineNumber = line;
-        super.visitLineNumber(line, start);
-    }
-
-    @Override
-    public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-        if (Type.getDescriptor(EvoSuiteExclude.class).equals(desc)) {
-            logger.info("Method has EvoSuite annotation: " + desc);
-            excludeMethod = true;
-        }
-        return super.visitAnnotation(desc, visible);
-    }
+	/* (non-Javadoc)
+	 * @see org.objectweb.asm.MethodVisitor#visitLineNumber(int, org.objectweb.asm.Label)
+	 */
+	@Override
+	public void visitLineNumber(int line, Label start) {
+		lineNumber = line;
+		super.visitLineNumber(line, start);
+	}
+	
+	@Override
+	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
+		if(Type.getDescriptor(EvoSuiteExclude.class).equals(desc)) {
+			logger.info("Method has EvoSuite annotation: "+desc);
+			excludeMethod = true;
+		}
+		return super.visitAnnotation(desc, visible);
+	}
 
     /**
      * {@inheritDoc}
      */
-    @Override
-    public void visitEnd() {
-        logger.debug("Creating CFG of " + className + "." + methodName);
-        boolean isExcludedMethod = excludeMethod || EXCLUDE.contains(methodName);
-        boolean isMainMethod = plain_name.equals("main") && Modifier.isStatic(access);
+	@Override
+	public void visitEnd() {
+		logger.debug("Creating CFG of "+className+"."+methodName);
+		boolean isExcludedMethod = excludeMethod || EXCLUDE.contains(methodName);
+		boolean isMainMethod = plain_name.equals("main") && Modifier.isStatic(access);
 
-        List<MethodInstrumentation> instrumentations = new ArrayList<>();
-        if (DependencyAnalysis.shouldInstrument(className, methodName)) {
-            if (ArrayUtil.contains(Properties.CRITERION, Criterion.DEFUSE)
-                    || ArrayUtil.contains(Properties.CRITERION, Criterion.ALLDEFS)) {
-                instrumentations.add(new BranchInstrumentation());
-                instrumentations.add(new DefUseInstrumentation());
+		List<MethodInstrumentation> instrumentations = new ArrayList<>();
+		if (DependencyAnalysis.shouldInstrument(className, methodName)) {
+			if (ArrayUtil.contains(Properties.CRITERION, Criterion.PATHCONDITION) /*SUSHI: Path condition fitness*/	
+					|| ArrayUtil.contains(Properties.CRITERION, Criterion.SEEPEP) /*SEEPEP: DAG coverage*//* use PC instrumentation for tracking ret values of actions */
+					|| ArrayUtil.contains(Properties.CRITERION, Criterion.BRANCH_WITH_AIDING_PATH_CONDITIONS)) { /*SUSHI: Aiding path conditions*/
+				instrumentations.add(new BranchInstrumentation());
+				instrumentations.add(new PathConditonInstrumentation()); 			
+			} 
+			else if (ArrayUtil.contains(Properties.CRITERION, Criterion.DEFUSE)
+		            || ArrayUtil.contains(Properties.CRITERION, Criterion.ALLDEFS)) {
+				instrumentations.add(new BranchInstrumentation());
+				instrumentations.add(new DefUseInstrumentation());
             } else if (ArrayUtil.contains(Properties.CRITERION, Criterion.MUTATION)
-                    || ArrayUtil.contains(Properties.CRITERION, Criterion.WEAKMUTATION)
-                    || ArrayUtil.contains(Properties.CRITERION, Criterion.ONLYMUTATION)
-                    || ArrayUtil.contains(Properties.CRITERION, Criterion.STRONGMUTATION)) {
-                instrumentations.add(new BranchInstrumentation());
-                instrumentations.add(new MutationInstrumentation());
-            } else {
-                instrumentations.add(new BranchInstrumentation());
-            }
-        } else {
-            //instrumentations.add(new BranchInstrumentation());
-        }
+		            || ArrayUtil.contains(Properties.CRITERION, Criterion.WEAKMUTATION)
+		            || ArrayUtil.contains(Properties.CRITERION, Criterion.ONLYMUTATION)
+		            || ArrayUtil.contains(Properties.CRITERION, Criterion.STRONGMUTATION)) {
+				instrumentations.add(new BranchInstrumentation());
+				instrumentations.add(new MutationInstrumentation());
+			} else {
+				instrumentations.add(new BranchInstrumentation());
+			}
+		} else {
+			//instrumentations.add(new BranchInstrumentation());
+		}
 
-        boolean executeOnMain = false;
-        boolean executeOnExcluded = false;
+		boolean executeOnMain = false;
+		boolean executeOnExcluded = false;
 
-        for (MethodInstrumentation instrumentation : instrumentations) {
-            executeOnMain = executeOnMain || instrumentation.executeOnMainMethod();
-            executeOnExcluded = executeOnExcluded
-                    || instrumentation.executeOnExcludedMethods();
-        }
+		for (MethodInstrumentation instrumentation : instrumentations) {
+			executeOnMain = executeOnMain || instrumentation.executeOnMainMethod();
+			executeOnExcluded = executeOnExcluded
+			        || instrumentation.executeOnExcludedMethods();
+		}
 
-        // super.visitEnd();
-        // Generate CFG of method
-        MethodNode mn = (AnnotatedMethodNode) mv;
+		// super.visitEnd();
+		// Generate CFG of method
+		MethodNode mn = (AnnotatedMethodNode) mv;
 
-        boolean checkForMain = false;
-        if (Properties.CONSIDER_MAIN_METHODS) {
-            checkForMain = true;
-        } else {
-            checkForMain = !isMainMethod || executeOnMain;
-        }
+		boolean checkForMain = false;
+		if (Properties.CONSIDER_MAIN_METHODS) {
+			checkForMain = true;
+		} else {
+			checkForMain = !isMainMethod || executeOnMain;
+		}
 
-        // Only instrument if the method is (not main and not excluded) or (the
-        // MethodInstrumentation wants it anyway)
-        if (checkForMain && (!isExcludedMethod || executeOnExcluded)
-                && (access & Opcodes.ACC_ABSTRACT) == 0
-                && (access & Opcodes.ACC_NATIVE) == 0) {
+		// Only instrument if the method is (not main and not excluded) or (the
+		// MethodInstrumentation wants it anyway)
+		if (checkForMain && (!isExcludedMethod || executeOnExcluded)
+		        && (access & Opcodes.ACC_ABSTRACT) == 0
+		        && (access & Opcodes.ACC_NATIVE) == 0) {
 
-            logger.info("Analyzing method " + methodName + " in class " + className);
+			logger.info("Analyzing method " + methodName + " in class " + className);
 
-            // MethodNode mn = new CFGMethodNode((MethodNode)mv);
-            // System.out.println("Generating CFG for "+ className+"."+mn.name +
-            // " ("+mn.desc +")");
+			// MethodNode mn = new CFGMethodNode((MethodNode)mv);
+			// System.out.println("Generating CFG for "+ className+"."+mn.name +
+			// " ("+mn.desc +")");
 
-            BytecodeAnalyzer bytecodeAnalyzer = new BytecodeAnalyzer();
-            logger.info("Generating CFG for method " + methodName);
+			BytecodeAnalyzer bytecodeAnalyzer = new BytecodeAnalyzer();
+			logger.info("Generating CFG for method " + methodName);
 
-            try {
+			try {
 
-                bytecodeAnalyzer.analyze(classLoader, className, methodName, mn);
-                logger.trace("Method graph for "
-                        + className
-                        + "."
-                        + methodName
-                        + " contains "
-                        + bytecodeAnalyzer.retrieveCFGGenerator().getRawGraph().vertexSet().size()
-                        + " nodes for " + bytecodeAnalyzer.getFrames().length
-                        + " instructions");
-                // compute Raw and ActualCFG and put both into GraphPool
-                bytecodeAnalyzer.retrieveCFGGenerator().registerCFGs();
-                logger.info("Created CFG for method " + methodName);
+				bytecodeAnalyzer.analyze(classLoader, className, methodName, mn);
+				logger.trace("Method graph for "
+				        + className
+				        + "."
+				        + methodName
+				        + " contains "
+				        + bytecodeAnalyzer.retrieveCFGGenerator().getRawGraph().vertexSet().size()
+				        + " nodes for " + bytecodeAnalyzer.getFrames().length
+				        + " instructions");
+				// compute Raw and ActualCFG and put both into GraphPool
+				bytecodeAnalyzer.retrieveCFGGenerator().registerCFGs();
+				logger.info("Created CFG for method " + methodName);
 
-                if (DependencyAnalysis.shouldInstrument(className, methodName)) {
-                    if (!methods.get(classLoader).containsKey(className))
-                        methods.get(classLoader).put(className, new HashSet<>());
+				if (DependencyAnalysis.shouldInstrument(className, methodName)) {
+					if (!methods.get(classLoader).containsKey(className))
+						methods.get(classLoader).put(className, new HashSet<>());
 
-                    // add the actual instrumentation
-                    logger.info("Instrumenting method " + methodName + " in class "
-                            + className);
-                    for (MethodInstrumentation instrumentation : instrumentations)
-                        instrumentation.analyze(classLoader, mn, className, methodName, access);
+					// add the actual instrumentation
+					logger.info("Instrumenting method " + methodName + " in class "
+					        + className);
+					for (MethodInstrumentation instrumentation : instrumentations)
+						instrumentation.analyze(classLoader, mn, className, methodName, access);
 
-                    handleBranchlessMethods();
-                    String id = className + "." + methodName;
-                    if (isUsable()) {
-                        methods.get(classLoader).get(className).add(id);
-                        logger.debug("Counting: " + id);
-                    }
-                }
-            } catch (AnalyzerException e) {
-                logger.error("Analyzer exception while analyzing " + className + "."
-                        + methodName + ": " + e);
-                e.printStackTrace();
-            }
+					handleBranchlessMethods();
+					String id = className + "." + methodName;
+					if (isUsable()) {
+						methods.get(classLoader).get(className).add(id);
+						logger.debug("Counting: " + id);
+					}
+				}
+			} catch (AnalyzerException e) {
+				logger.error("Analyzer exception while analyzing " + className + "."
+				        + methodName + ": " + e);
+				e.printStackTrace();
+			}
 
-        } else {
-            logger.debug("NOT Creating CFG of " + className + "." + methodName + ": " + checkForMain + ", " + ((!isExcludedMethod || executeOnExcluded)) + ", " + ((access & Opcodes.ACC_ABSTRACT) == 0) + ", " + ((access & Opcodes.ACC_NATIVE) == 0));
-            super.visitEnd();
-        }
-        mn.accept(next);
-    }
+		} else {
+			logger.debug("NOT Creating CFG of "+className+"."+methodName+": "+checkForMain+", "+((!isExcludedMethod || executeOnExcluded)) +", "+((access & Opcodes.ACC_ABSTRACT) == 0)+", "+((access & Opcodes.ACC_NATIVE) == 0));
+			super.visitEnd();
+		}
+		mn.accept(next);
+	}
 
-    /*
-     * (non-Javadoc)
-     *
-     * @see org.objectweb.asm.commons.LocalVariablesSorter#visitMaxs(int, int)
-     */
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.objectweb.asm.commons.LocalVariablesSorter#visitMaxs(int, int)
+	 */
 
     /**
      * {@inheritDoc}
      */
-    @Override
-    public void visitMaxs(int maxStack, int maxLocals) {
-        int maxNum = 7;
-        super.visitMaxs(Math.max(maxNum, maxStack), maxLocals);
-    }
+	@Override
+	public void visitMaxs(int maxStack, int maxLocals) {
+		int maxNum = 7;
+		super.visitMaxs(Math.max(maxNum, maxStack), maxLocals);
+	}
 
-    private void handleBranchlessMethods() {
-        String id = className + "." + methodName;
-        if (BranchPool.getInstance(classLoader).getNonArtificialBranchCountForMethod(className, methodName) == 0) {
-            if (isUsable()) {
-                logger.debug("Method has no branches: " + id);
-                BranchPool.getInstance(classLoader).addBranchlessMethod(className, id, lineNumber);
-            }
-        }
-    }
+	private void handleBranchlessMethods() {
+		String id = className + "." + methodName;
+		if (BranchPool.getInstance(classLoader).getNonArtificialBranchCountForMethod(className, methodName) == 0) {
+			if (isUsable()) {
+				logger.debug("Method has no branches: " + id);
+				BranchPool.getInstance(classLoader).addBranchlessMethod(className, id, lineNumber);
+			}
+		}
+	}
 
-    /**
-     * See description of CFGMethodAdapter.EXCLUDE
-     *
-     * @return
-     */
-    private boolean isUsable() {
-        if ((this.access & Opcodes.ACC_SYNTHETIC) != 0)
-            return false;
+	/**
+	 * See description of CFGMethodAdapter.EXCLUDE
+	 * 
+	 * @return
+	 */
+	private boolean isUsable() {
+		if((this.access & Opcodes.ACC_SYNTHETIC) != 0)
+			return false;
 
-        if ((this.access & Opcodes.ACC_BRIDGE) != 0)
-            return false;
+		if((this.access & Opcodes.ACC_BRIDGE) != 0)
+			return false;
 
-        if ((this.access & Opcodes.ACC_NATIVE) != 0)
-            return false;
+		if((this.access & Opcodes.ACC_NATIVE) != 0)
+			return false;
 
-        if (methodName.contains("<clinit>"))
-            return false;
+		if(methodName.contains("<clinit>"))
+			return false;
 
-        // If we are not using reflection, covering private constructors is difficult?
-        if (Properties.P_REFLECTION_ON_PRIVATE <= 0.0) {
+		// If we are not using reflection, covering private constructors is difficult?
+		if(Properties.P_REFLECTION_ON_PRIVATE <= 0.0) {
             return !methodName.contains("<init>") || (access & Opcodes.ACC_PRIVATE) != Opcodes.ACC_PRIVATE;
-        }
+		}
 
-        return true;
-    }
+		return true;
+	}
+	
+	public Set<String> getMethods(String className) {
+		return getMethods(classLoader, className);
+	}
 
-    public Set<String> getMethods(String className) {
-        return getMethods(classLoader, className);
-    }
-
-    /**
-     * Returns a set with all unique methodNames of methods.
-     *
+	/**
+	 * Returns a set with all unique methodNames of methods.
+	 * 
      * @param className a {@link java.lang.String} object.
-     * @return A set with all unique methodNames of methods.
-     */
-    public static Set<String> getMethods(ClassLoader classLoader, String className) {
-        Set<String> targetMethods = new HashSet<>();
-        if (!methods.containsKey(classLoader))
-            return targetMethods;
+	 * @return A set with all unique methodNames of methods.
+	 */
+	public static Set<String> getMethods(ClassLoader classLoader, String className) {
+		Set<String> targetMethods = new HashSet<>();
+		if(!methods.containsKey(classLoader))
+			return targetMethods;
+		
+		for (String currentClass : methods.get(classLoader).keySet()) {
+			if (currentClass.equals(className)
+			        || currentClass.startsWith(className + "$"))
+				targetMethods.addAll(methods.get(classLoader).get(currentClass));
+		}
 
-        for (String currentClass : methods.get(classLoader).keySet()) {
-            if (currentClass.equals(className)
-                    || currentClass.startsWith(className + "$"))
-                targetMethods.addAll(methods.get(classLoader).get(currentClass));
-        }
+		return targetMethods;
+	}
+	
+	public Set<String> getMethods() {
+		return getMethods(classLoader);
+	}
 
-        return targetMethods;
-    }
+	/**
+	 * Returns a set with all unique methodNames of methods.
+	 * 
+	 * @return A set with all unique methodNames of methods.
+	 */
+	public static Set<String> getMethods(ClassLoader classLoader) {
+		Set<String> targetMethods = new HashSet<>();
+		if(!methods.containsKey(classLoader))
+			return targetMethods;
+		
+		for (String currentClass : methods.get(classLoader).keySet()) {
+			targetMethods.addAll(methods.get(classLoader).get(currentClass));
+		}
 
-    public Set<String> getMethods() {
-        return getMethods(classLoader);
-    }
+		return targetMethods;
+	}
+	
+	
+	public Set<String> getMethodsPrefix(String className) {
+		return getMethodsPrefix(classLoader, className);
+	}
 
-    /**
-     * Returns a set with all unique methodNames of methods.
-     *
-     * @return A set with all unique methodNames of methods.
-     */
-    public static Set<String> getMethods(ClassLoader classLoader) {
-        Set<String> targetMethods = new HashSet<>();
-        if (!methods.containsKey(classLoader))
-            return targetMethods;
-
-        for (String currentClass : methods.get(classLoader).keySet()) {
-            targetMethods.addAll(methods.get(classLoader).get(currentClass));
-        }
-
-        return targetMethods;
-    }
-
-
-    public Set<String> getMethodsPrefix(String className) {
-        return getMethodsPrefix(classLoader, className);
-    }
-
-    /**
-     * Returns a set with all unique methodNames of methods.
-     *
+	/**
+	 * Returns a set with all unique methodNames of methods.
+	 * 
      * @param className a {@link java.lang.String} object.
-     * @return A set with all unique methodNames of methods.
-     */
-    public static Set<String> getMethodsPrefix(ClassLoader classLoader, String className) {
-        Set<String> matchingMethods = new HashSet<>();
-        if (!methods.containsKey(classLoader))
-            return matchingMethods;
+	 * @return A set with all unique methodNames of methods.
+	 */
+	public static Set<String> getMethodsPrefix(ClassLoader classLoader, String className) {
+		Set<String> matchingMethods = new HashSet<>();
+		if(!methods.containsKey(classLoader))
+			return matchingMethods;
 
-        for (String name : methods.get(classLoader).keySet()) {
-            if (name.startsWith(className)) {
-                matchingMethods.addAll(methods.get(classLoader).get(name));
-            }
-        }
+		for (String name : methods.get(classLoader).keySet()) {
+			if (name.startsWith(className)) {
+				matchingMethods.addAll(methods.get(classLoader).get(name));
+			}
+		}
 
-        return matchingMethods;
-    }
+		return matchingMethods;
+	}
+	
+	public int getNumMethodsPrefix(String className) {
+		return getNumMethodsPrefix(classLoader, className);
+	}
 
-    public int getNumMethodsPrefix(String className) {
-        return getNumMethodsPrefix(classLoader, className);
-    }
-
-    /**
-     * Returns a set with all unique methodNames of methods.
-     *
+	/**
+	 * Returns a set with all unique methodNames of methods.
+	 * 
      * @param className a {@link java.lang.String} object.
-     * @return A set with all unique methodNames of methods.
-     */
-    public static int getNumMethodsPrefix(ClassLoader classLoader, String className) {
-        int num = 0;
-        if (!methods.containsKey(classLoader))
-            return num;
+	 * @return A set with all unique methodNames of methods.
+	 */
+	public static int getNumMethodsPrefix(ClassLoader classLoader, String className) {
+		int num = 0;
+		if(!methods.containsKey(classLoader))
+			return num;
 
-        for (String name : methods.get(classLoader).keySet()) {
-            if (name.startsWith(className)) {
-                num += methods.get(classLoader).get(name).size();
-            }
-        }
+		for (String name : methods.get(classLoader).keySet()) {
+			if (name.startsWith(className)) {
+				num += methods.get(classLoader).get(name).size();
+			}
+		}
 
-        return num;
-    }
+		return num;
+	}
+	
+	public int getNumMethods() {
+		return getNumMethods(classLoader);
+	}
 
-    public int getNumMethods() {
-        return getNumMethods(classLoader);
-    }
+	/**
+	 * Returns a set with all unique methodNames of methods.
+	 * 
+	 * @return A set with all unique methodNames of methods.
+	 */
+	public static int getNumMethods(ClassLoader classLoader) {
+		int num = 0;
+		if(!methods.containsKey(classLoader))
+			return num;
+		
+		for (String name : methods.get(classLoader).keySet()) {
+			num += methods.get(classLoader).get(name).size();
+		}
 
-    /**
-     * Returns a set with all unique methodNames of methods.
-     *
-     * @return A set with all unique methodNames of methods.
-     */
-    public static int getNumMethods(ClassLoader classLoader) {
-        int num = 0;
-        if (!methods.containsKey(classLoader))
-            return num;
+		return num;
+	}
+	
+	
+	public int getNumMethodsMemberClasses(String className) {
+		return getNumMethodsMemberClasses(classLoader, className);
+	}
 
-        for (String name : methods.get(classLoader).keySet()) {
-            num += methods.get(classLoader).get(name).size();
-        }
-
-        return num;
-    }
-
-
-    public int getNumMethodsMemberClasses(String className) {
-        return getNumMethodsMemberClasses(classLoader, className);
-    }
-
-    /**
-     * Returns a set with all unique methodNames of methods.
-     *
+	/**
+	 * Returns a set with all unique methodNames of methods.
+	 * 
      * @param className a {@link java.lang.String} object.
-     * @return A set with all unique methodNames of methods.
-     */
-    public static int getNumMethodsMemberClasses(ClassLoader classLoader, String className) {
-        int num = 0;
-        if (!methods.containsKey(classLoader))
-            return num;
+	 * @return A set with all unique methodNames of methods.
+	 */
+	public static int getNumMethodsMemberClasses(ClassLoader classLoader, String className) {
+		int num = 0;
+		if(!methods.containsKey(classLoader))
+			return num;
 
-        for (String name : methods.get(classLoader).keySet()) {
-            if (name.equals(className) || name.startsWith(className + "$")) {
-                num += methods.get(classLoader).get(name).size();
-            }
-        }
+		for (String name : methods.get(classLoader).keySet()) {
+			if (name.equals(className) || name.startsWith(className + "$")) {
+				num += methods.get(classLoader).get(name).size();
+			}
+		}
 
-        return num;
-    }
+		return num;
+	}
 }

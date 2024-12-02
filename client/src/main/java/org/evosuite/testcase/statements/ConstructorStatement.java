@@ -27,6 +27,7 @@ import org.evosuite.testcase.TestCase;
 import org.evosuite.testcase.TestFactory;
 import org.evosuite.testcase.execution.CodeUnderTestException;
 import org.evosuite.testcase.execution.EvosuiteError;
+import org.evosuite.testcase.execution.ExecutionTracer;
 import org.evosuite.testcase.execution.Scope;
 import org.evosuite.testcase.execution.UncompilableCodeException;
 import org.evosuite.testcase.variable.VariableReference;
@@ -216,7 +217,13 @@ public class ConstructorStatement extends EntityWithParametersStatement {
                         }
                     }
 
-                    Object ret = constructor.getConstructor().newInstance(inputs);
+                    Object ret;
+                    try {
+                    	ret = constructor.getConstructor().newInstance(inputs);
+                    } catch (InvocationTargetException e) { /*SUSHI: Path condition fitness*/
+                    	ExecutionTracer.passedExceptionPropagatedBackToTheTestCase(e.getCause()); 
+                    	throw e;
+                    }
 
                     try {
                         // assert(retval.getVariableClass().isAssignableFrom(ret.getClass())) :"we want an " + retval.getVariableClass() + " but got an " + ret.getClass();

@@ -30,6 +30,14 @@
         </mailingList>
     </mailingLists>
 
+	<repositories>
+ 		<!-- a repository local to the project, to manage the dependency on jbse and shushi-lib -->
+   		<repository>
+    		<id>the-project-local-repo</id>
+    		<url>file://${project.basedir}/target</url>
+  		</repository>
+	</repositories>
+
     <modules>
         <module>master</module>
         <module>client</module>
@@ -86,7 +94,6 @@
         <name>EvoSuite</name>
         <url>http://www.evosuite.org/</url>
     </organization>
-
 
     <profiles>
         <profile>
@@ -426,7 +433,16 @@
                 <artifactId>oro</artifactId>
                 <version>2.0.8</version>
             </dependency>
-
+       		<dependency>
+		    	<groupId>jbse</groupId>
+   				<artifactId>jbse</artifactId>
+   				<version>0.10.0</version>
+			</dependency>
+        	<dependency>
+		    	<groupId>sushi-lib</groupId>
+   				<artifactId>sushi-lib</artifactId>
+   				<version>0.2.0</version>
+			</dependency>
             <dependency>
                 <!-- Apache 2 -->
                 <groupId>org.apache.maven.shared</groupId>
@@ -474,7 +490,45 @@
         </extensions>
 
         <plugins>
-
+        	<plugin>
+                <!-- maven-install-plugin, to install the jars of jbse and shushi-lib in the local repository -->
+                <inherited>false</inherited>
+				<groupId>org.apache.maven.plugins</groupId>
+        		<artifactId>maven-install-plugin</artifactId>
+       			<version>3.1.1</version>
+                <executions>
+	                <execution>
+	                	<id>install-jbse-jar</id>
+    	                <phase>package</phase>
+                        <goals>
+                        	<goal>install-file</goal>
+                        </goals>
+                        <configuration>
+                        	<file>${project.basedir}/sushi-runtime/jbse/build/libs/jbse-0.11.0-SNAPSHOT.jar</file> 
+                            <groupId>jbse</groupId> 
+                            <artifactId>jbse</artifactId> 
+                            <version>0.10.0</version>
+                            <packaging>jar</packaging>
+                            <localRepositoryPath>${project.basedir}/target</localRepositoryPath>
+                        </configuration>
+                    </execution>
+	                <execution>
+	                	<id>install-sushilib-jar</id>
+    	                <phase>package</phase>
+                        <goals>
+                        	<goal>install-file</goal>
+                        </goals>
+                        <configuration>
+                        	<file>${project.basedir}/sushi-runtime/sushi-lib/build/libs/sushi-lib-0.2.0-SNAPSHOT.jar</file> 
+                            <groupId>sushi-lib</groupId> 
+                            <artifactId>sushi-lib</artifactId> 
+                            <version>0.2.0</version>
+                            <packaging>jar</packaging>
+                            <localRepositoryPath>${project.basedir}/target</localRepositoryPath>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.sonatype.plugins</groupId>
                 <artifactId>nexus-staging-maven-plugin</artifactId>
@@ -630,6 +684,26 @@
                     <encoding>${project.build.sourceEncoding}</encoding>
                 </configuration>
             </plugin>
+            <plugin>
+				<!-- remove jbse and sushi-lib jars to enforce using the latest jars--> 
+                <inherited>false</inherited>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+         			<execution>
+           				<phase>package</phase>
+            			<goals>
+              				<goal>purge-local-repository</goal>
+            			</goals>
+            			<configuration>
+            				<manualIncludes>
+	                			<manualInclude>jbse:jbse</manualInclude>
+	                			<manualInclude>sushi-lib:sushi-lib</manualInclude>
+            				</manualIncludes>
+              			</configuration>
+          			</execution>
+        		</executions>            
+        	</plugin>
             <!-- <plugin> <groupId>org.apache.maven.plugins</groupId> <artifactId>maven-dependency-plugin</artifactId>
                  <version>2.5.1</version> <executions> <execution> <id>copy</id> <phase>compile</phase>
                  <goals> <goal>copy</goal> </goals> <configuration> <artifactItems> <artifactItem>
@@ -729,7 +803,6 @@
                 </plugin>
                 <!-- Removed Eclipse m2e lifecycle mapping plugin. For a better solution
                     see: http://stackoverflow.com/questions/7409823/m2e-lifecycle-mapping-not-found -->
-
                 <!-- Need to change packages of dependencies to avoid classpath conflicts with previous versions.
                      This is done mainly due to ASM that is not backward compatible and for many packages
                      used by in memory database -->
@@ -844,7 +917,6 @@
         <systemTests>**/*SystemTest.java</systemTests>
         <integrationTests>**/*IntTest.java</integrationTests>
         <rerunFailingTestsCount>0</rerunFailingTestsCount>
-
     </properties>
 
 </project>

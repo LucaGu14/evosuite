@@ -1,0 +1,19 @@
+allprojects {
+    apply plugin: 'java'
+    group = 'sushi-runtime'
+    version = '0.1.0-SNAPSHOT'
+
+	ext {
+		javaVersion = JavaLanguageVersion.of(8)
+	}
+	
+    java {
+        toolchain {
+            languageVersion = javaVersion
+        }
+    }
+
+    tasks.withType(JavaCompile) {
+        options.encoding = 'UTF-8'
+    }
+}
