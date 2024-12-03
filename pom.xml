@@ -504,7 +504,7 @@
                         	<goal>install-file</goal>
                         </goals>
                         <configuration>
-                        	<file>${project.basedir}/sushi-runtime/jbse/build/libs/jbse-0.11.0-SNAPSHOT.jar</file> 
+                        	<file>${project.basedir}/sushi-runtime/jbse/build/libs/jbse-0.10.0-SNAPSHOT.jar</file> 
                             <groupId>jbse</groupId> 
                             <artifactId>jbse</artifactId> 
                             <version>0.10.0</version>
