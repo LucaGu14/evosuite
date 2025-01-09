@@ -226,7 +226,7 @@ public class PathConditionManager extends MultiCriteriaManager implements Search
 	}
 
 
-	private List<List<TestFitnessFunction>> separateWrtGoalsToEmitIndipendently(List<TestFitnessFunction> goals) {
+	private List<List<TestFitnessFunction>> separateWrtGoalsToEmitIndependently(List<TestFitnessFunction> goals) {
 		List<List<TestFitnessFunction>> separatedGoals = new ArrayList<>();
 		separatedGoals.add(0, new ArrayList<>());
 		if (Properties.EMIT_TESTS_FOR_CRITERION != null && Properties.EMIT_TESTS_FOR_CRITERION.length == 1 && Properties.EMIT_TESTS_FOR_CRITERION[0] == Criterion.PATHCONDITION) { 
@@ -264,11 +264,13 @@ public class PathConditionManager extends MultiCriteriaManager implements Search
 			}
 		}
 
-		List<List<TestFitnessFunction>> separatedGoals = separateWrtGoalsToEmitIndipendently(consideredGoals);
+		List<List<TestFitnessFunction>> separatedGoals = separateWrtGoalsToEmitIndependently(consideredGoals);
 		for (List<TestFitnessFunction> goals: separatedGoals) {
 			TestChromosome tcToWrite = (TestChromosome) tc.clone();
 			//tcToWrite.getTestCase().clearCoveredGoals(); 
 
+			//LUCA: Commented out minimization since it introduces side effects that reduce overall coverage
+			/*
 			if (Properties.MINIMIZE) {
 				TestSuiteMinimizer minimizer = new TestSuiteMinimizer(new AbstractFitnessFactory<TestFitnessFunction>() {
 					@Override
@@ -288,6 +290,7 @@ public class PathConditionManager extends MultiCriteriaManager implements Search
 				}
 				tcToWrite = tsuite.getTestChromosome(0);
 			}
+			*/
 
 			if (Properties.INLINE) {
 				ConstantInliner inliner = new ConstantInliner();
