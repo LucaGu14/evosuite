@@ -119,12 +119,7 @@ public abstract class Archive implements Serializable {
                 this.nonCoveredTargetsOfEachMethod.remove(targetMethod);
 
                 // inform TestCluster that method 'targetMethod' is fully covered
-                /*GIO: BUG FIX: Actually the test cluster must still consider this call
-                 * because, even if the method is fully covered, it may include side effect
-                 * that are relevant for covering targets in other methods. For example, a 
-                 * common case is that some fully covered public methods may call no-yet-covered
-                 * private methods, which cannot be covered otherwise.
-                 */// this.ignoreMethodCall(this.getClassName(target), this.getMethodName(target));
+                this.ignoreMethodCall(this.getClassName(target), this.getMethodName(target));
             }
         }
     }
